@@ -10,7 +10,3 @@ JOHN = sp.address("tz1L2fvQBRrZyStHbNPQWCxWiRUo5MEisKox")
 
 # Dummy token address
 TOKEN = sp.address("tz1P2Po7YM526ughEsRbY4oR9zaUPDZjxFrb")
-
-# Dummy round address
-ROUND = sp.address("tz1TDSmoZXwVevLTEvKCTHWpomG76oC9S2fJ")
-DONATION_HANDLER = sp.address("tz1W5VkdB5s7ENMESVBtwyt9kyvLqPcUczRT")

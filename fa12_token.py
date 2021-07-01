@@ -5,7 +5,7 @@
 # All changes made to the original template are denoted by CHANGED: <description>
 
 # The contract was inspired by the Kolibri Governance Token contract & streamlined for use
-# with Kickflow DAO
+# with Kickflow's Flow-DAO
 # https://github.com/Hover-Labs/murmuration/blob/main/smart_contracts/token.py
 
 import smartpy as sp

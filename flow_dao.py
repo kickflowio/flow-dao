@@ -26,17 +26,13 @@ STATE_AWAITING_BALANCE_SNAPSHOT = 1
 # Default Values
 #################
 
-MAIN_GOVERNANCE_PARAMETERS = sp.record(
+GOVERNANCE_PARAMETERS = sp.record(
     voting_period=sp.int(2 * DAY),
     timelock_period=sp.int(1 * DAY),
     quorum_votes=200_000 * DECIMALS,
     proposal_threshold=50_000 * DECIMALS,
 )
 
-ROUND_GOVERNANCE_PARAMETERS = sp.record(
-    round_address=sp.some(Addresses.ROUND),
-    donation_handler_address=sp.some(Addresses.DONATION_HANDLER),
-)
 
 # Proposal buffer type to be used during callback execution
 PROPOSAL_BUFFER = sp.TRecord(
@@ -52,11 +48,10 @@ VOTING_BUFFER = sp.TRecord(sender=sp.TAddress, proposal_id=sp.TNat, vote_value=s
 ###########
 
 
-class KickflowDAO(sp.Contract):
+class FlowDAO(sp.Contract):
     def __init__(
         self,
-        main_governance_parameters=MAIN_GOVERNANCE_PARAMETERS,
-        round_governance_parameters=ROUND_GOVERNANCE_PARAMETERS,
+        governance_parameters=GOVERNANCE_PARAMETERS,
         proposals=sp.big_map(
             l={},
             tkey=sp.TNat,
@@ -81,8 +76,7 @@ class KickflowDAO(sp.Contract):
 
         self.init_type(
             sp.TRecord(
-                main_governance_parameters=DAO.MAIN_GOVERNANCE_PARAMETERS_TYPE,
-                round_governance_parameters=DAO.ROUND_GOVERNANCE_PARAMETERS_TYPE,
+                governance_parameters=DAO.GOVERNANCE_PARAMETERS_TYPE,
                 uuid=sp.TNat,
                 proposals=sp.TBigMap(sp.TNat, Proposal.PROPOSAL_TYPE),
                 token_address=sp.TAddress,
@@ -94,8 +88,7 @@ class KickflowDAO(sp.Contract):
         )
 
         self.init(
-            main_governance_parameters=main_governance_parameters,
-            round_governance_parameters=round_governance_parameters,
+            governance_parameters=governance_parameters,
             uuid=sp.nat(0),
             proposals=proposals,
             token_address=token_address,
@@ -150,7 +143,7 @@ class KickflowDAO(sp.Contract):
 
         # Other sanity checks
         sp.verify(
-            balance >= self.data.main_governance_parameters.proposal_threshold,
+            balance >= self.data.governance_parameters.proposal_threshold,
             Errors.NOT_ENOUGH_TOKENS,
         )
         sp.verify(sp.sender == self.data.token_address, Errors.NOT_ALLOWED)
@@ -165,7 +158,7 @@ class KickflowDAO(sp.Contract):
             proposal_metadata=buffer_value.proposal_metadata,
             proposal_lambda=buffer_value.proposal_lambda,
             proposal_timelock=sp.record(ending=sp.timestamp(0), activated=False),
-            voting_end=sp.now.add_seconds(self.data.main_governance_parameters.voting_period),
+            voting_end=sp.now.add_seconds(self.data.governance_parameters.voting_period),
             creator=buffer_value.sender,
             origin_level=sp.level,
             status=Proposal.PROPOSAL_STATUS_VOTING,
@@ -194,14 +187,14 @@ class KickflowDAO(sp.Contract):
 
         # Verify voting thresholds
         total_votes = proposal.up_votes + proposal.down_votes
-        quorum_attained = total_votes >= self.data.main_governance_parameters.quorum_votes
+        quorum_attained = total_votes >= self.data.governance_parameters.quorum_votes
         majority_vote = proposal.up_votes > proposal.down_votes
 
         sp.if majority_vote & quorum_attained:
             # Activate proposal timelock
             proposal.proposal_timelock.activated = True
             proposal.proposal_timelock.ending = sp.now.add_seconds(
-                self.data.main_governance_parameters.timelock_period
+                self.data.governance_parameters.timelock_period
             )
 
             # Change proposal status to timelocked
@@ -306,27 +299,14 @@ class KickflowDAO(sp.Contract):
         proposal.status = Proposal.PROPOSAL_STATUS_EXECUTED
 
     @sp.entry_point
-    def set_main_governance_parameters(self, params):
-        sp.set_type(params, DAO.MAIN_GOVERNANCE_PARAMETERS_TYPE)
+    def set_governance_parameters(self, params):
+        sp.set_type(params, DAO.GOVERNANCE_PARAMETERS_TYPE)
 
         # Confirm if the sender is the DAO itself
         sp.verify(sp.sender == sp.self_address, Errors.NOT_ALLOWED)
 
-        self.data.main_governance_parameters = params
+        self.data.governance_parameters = params
 
-    @sp.entry_point
-    def set_round_governance_parameters(self, params):
-        sp.set_type(params, DAO.ROUND_GOVERNANCE_PARAMETERS_TYPE)
-
-        # Confirm if the sender is the DAO itself
-        sp.verify(sp.sender == sp.self_address, Errors.NOT_ALLOWED)
-
-        self.data.round_governance_parameters = params
-
-    @sp.utils.view(DAO.ROUND_GOVERNANCE_PARAMETERS_TYPE)
-    def get_round_parameters(self, param):
-        sp.set_type(param, sp.TUnit)
-        sp.result(self.data.round_governance_parameters)
 
 
 # Helper viewer class
@@ -351,7 +331,7 @@ if __name__ == "__main__":
         scenario = sp.test_scenario()
 
         token = Token.FA12()
-        dao = KickflowDAO(token_address=token.address)
+        dao = FlowDAO(token_address=token.address)
 
         # Create dummy store with DAO as admin
         dummy_store = DummyStore.DummyStore(dao.address)
@@ -404,7 +384,7 @@ if __name__ == "__main__":
         scenario = sp.test_scenario()
 
         token = Token.FA12()
-        dao = KickflowDAO(token_address=token.address)
+        dao = FlowDAO(token_address=token.address)
 
         # Create dummy store with DAO as admin
         dummy_store = DummyStore.DummyStore(dao.address)
@@ -442,7 +422,7 @@ if __name__ == "__main__":
         scenario = sp.test_scenario()
 
         token = Token.FA12()
-        dao = KickflowDAO(token_address=token.address)
+        dao = FlowDAO(token_address=token.address)
 
         # Create dummy store with DAO as admin
         dummy_store = DummyStore.DummyStore(dao.address)
@@ -483,7 +463,7 @@ if __name__ == "__main__":
     def test():
         scenario = sp.test_scenario()
 
-        dao = KickflowDAO()
+        dao = FlowDAO()
 
         scenario += dao
 
@@ -514,7 +494,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -561,7 +541,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal_1, 2: proposal_2}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal_1, 2: proposal_2}))
 
         scenario += dao
 
@@ -596,7 +576,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -622,7 +602,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -648,7 +628,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_REJECTED,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -680,7 +660,7 @@ if __name__ == "__main__":
 
         token = DummyToken.DummyToken(20_000 * DECIMALS)
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
 
         scenario += dao
         scenario += token
@@ -734,7 +714,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_REJECTED,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -765,7 +745,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
 
@@ -793,7 +773,7 @@ if __name__ == "__main__":
 
         token = DummyToken.DummyToken(0)
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
 
         scenario += dao
         scenario += token
@@ -826,7 +806,7 @@ if __name__ == "__main__":
 
         token = DummyToken.DummyToken(10_000 * DECIMALS)
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}), token_address=token.address)
 
         scenario += dao
         scenario += token
@@ -848,7 +828,7 @@ if __name__ == "__main__":
     def test():
         scenario = sp.test_scenario()
 
-        dao = KickflowDAO()
+        dao = FlowDAO()
         scenario += dao
 
         scenario += dao.vote_callback(50_000 * DECIMALS).run(
@@ -883,7 +863,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_TIMELOCKED,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
         scenario += dummy_store
@@ -926,7 +906,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_TIMELOCKED,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
         scenario += dummy_store
@@ -960,7 +940,7 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_REJECTED,
         )
 
-        dao = KickflowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
 
         scenario += dao
         scenario += dummy_store
@@ -970,23 +950,23 @@ if __name__ == "__main__":
             now=sp.timestamp(1), valid=False, exception=Errors.TIMELOCK_INACTIVE
         )
 
-    #################################
-    # set_main_governance_parameters
-    #################################
+    ############################
+    # set_governance_parameters
+    ############################
 
-    @sp.add_test(name="set_main_governance_parameters sets new values for the parameters")
+    @sp.add_test(name="set_governance_parameters sets new values for the parameters")
     def test():
         scenario = sp.test_scenario()
 
-        dao = KickflowDAO()
+        dao = FlowDAO()
 
         scenario += dao
 
         # Verify initial values for main governance parameters
-        scenario.verify(dao.data.main_governance_parameters == MAIN_GOVERNANCE_PARAMETERS)
+        scenario.verify(dao.data.governance_parameters == GOVERNANCE_PARAMETERS)
 
-        # Call the set_main_governance_parameters method
-        scenario += dao.set_main_governance_parameters(
+        # Call the set_governance_parameters method
+        scenario += dao.set_governance_parameters(
             sp.record(
                 voting_period=sp.int(3 * DAY),
                 timelock_period=sp.int(1 * DAY),
@@ -997,7 +977,7 @@ if __name__ == "__main__":
 
         # Verify the values for the parameters
         scenario.verify(
-            dao.data.main_governance_parameters
+            dao.data.governance_parameters
             == sp.record(
                 voting_period=sp.int(3 * DAY),
                 timelock_period=sp.int(1 * DAY),
@@ -1006,19 +986,19 @@ if __name__ == "__main__":
             )
         )
 
-    @sp.add_test(name="set_main_governance_parameters fails if sender is not DAO address")
+    @sp.add_test(name="set_governance_parameters fails if sender is not DAO address")
     def test():
         scenario = sp.test_scenario()
 
-        dao = KickflowDAO()
+        dao = FlowDAO()
 
         scenario += dao
 
         # Verify initial values for main governance parameters
-        scenario.verify(dao.data.main_governance_parameters == MAIN_GOVERNANCE_PARAMETERS)
+        scenario.verify(dao.data.governance_parameters == GOVERNANCE_PARAMETERS)
 
-        # Call the set_main_governance_parameters method
-        scenario += dao.set_main_governance_parameters(
+        # Call the set_governance_parameters method
+        scenario += dao.set_governance_parameters(
             sp.record(
                 voting_period=sp.int(3 * DAY),
                 timelock_period=sp.int(1 * DAY),
@@ -1027,74 +1007,4 @@ if __name__ == "__main__":
             )
         ).run(sender=Addresses.ALICE, valid=False, exception=Errors.NOT_ALLOWED)
 
-    ################################
-    # set_round_governance_parameters
-    #################################
-
-    @sp.add_test(name="set_round_governance_parameters sets new values for the parameters")
-    def test():
-        scenario = sp.test_scenario()
-
-        dao = KickflowDAO()
-
-        scenario += dao
-
-        # Verify initial values for round governance parameters
-        scenario.verify(dao.data.round_governance_parameters == ROUND_GOVERNANCE_PARAMETERS)
-
-        # Call the set_round_governance_parameters method
-        scenario += dao.set_round_governance_parameters(
-            sp.record(
-                round_address=sp.some(Addresses.ROUND),
-                donation_handler_address=sp.some(Addresses.DONATION_HANDLER),
-            )
-        ).run(sender=dao.address)
-
-        # Verify the values for the parameters
-        scenario.verify(
-            dao.data.round_governance_parameters
-            == sp.record(
-                round_address=sp.some(Addresses.ROUND),
-                donation_handler_address=sp.some(Addresses.DONATION_HANDLER),
-            )
-        )
-
-    @sp.add_test(name="set_round_governance_parameters fails if sender is not DAO address")
-    def test():
-        scenario = sp.test_scenario()
-
-        dao = KickflowDAO()
-
-        scenario += dao
-
-        # Verify initial values for round governance parameters
-        scenario.verify(dao.data.round_governance_parameters == ROUND_GOVERNANCE_PARAMETERS)
-
-        # Call the set_round_governance_parameters method
-        scenario += dao.set_round_governance_parameters(
-            sp.record(
-                round_address=sp.some(Addresses.ROUND),
-                donation_handler_address=sp.some(Addresses.DONATION_HANDLER),
-            )
-        ).run(sender=Addresses.ALICE, valid=False, exception=Errors.NOT_ALLOWED)
-
-    #######################
-    # get_round_parameters
-    #######################
-
-    @sp.add_test(name="get_round_parameters returns the correct values")
-    def test():
-        scenario = sp.test_scenario()
-
-        dao = KickflowDAO()
-        viewer = Viewer(DAO.ROUND_GOVERNANCE_PARAMETERS_TYPE)
-
-        scenario += dao
-        scenario += viewer
-
-        scenario += dao.get_round_parameters((sp.unit, viewer.typed.target))
-
-        scenario.verify(viewer.data.last.open_some() == ROUND_GOVERNANCE_PARAMETERS)
-
-
-sp.add_compilation_target("kickflow_dao", KickflowDAO())
+sp.add_compilation_target("flow_dao", FlowDAO())
