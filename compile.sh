@@ -10,13 +10,13 @@ echo "----------------------------------------"
 SMART_PY_CLI=~/smartpy-cli/SmartPy.sh
 
 # Output directory
-OUT_DIR=./smartpy_outputs
+OUT_DIR=./test_outputs
 
 # Compilation directory
 COMP_DIR=./michelson
 
 # Array of files to compile.
-CONTRACTS_ARRAY=(fa12_token)
+CONTRACTS_ARRAY=(fa12_token kickflow_dao)
 
 # Ensure we have a SmartPy binary.
 if [ ! -f "$SMART_PY_CLI" ]; then

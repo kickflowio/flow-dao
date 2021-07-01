@@ -5,7 +5,7 @@
 # All changes made to the original template are denoted by CHANGED: <description>
 
 # The contract was inspired by the Kolibri Governance Token contract & streamlined for use
-# with Kickflow DAO 
+# with Kickflow DAO
 # https://github.com/Hover-Labs/murmuration/blob/main/smart_contracts/token.py
 
 import smartpy as sp
@@ -40,7 +40,7 @@ class FA12_Error:
     # CHANGED: added errors
     MintingDisabled = make("MintingDisabled")
     BlockNotFinalized = make("BlockNotFinalized")
-    SelfTransferNotAllowed = make('SelfTransferNotAllowed')
+    SelfTransferNotAllowed = make("SelfTransferNotAllowed")
 
 
 ## ## Meta-Programming Configuration
@@ -77,12 +77,16 @@ class FA12_core(sp.Contract, FA12_common):
         self.config = config
 
         self.init(
-            balances=sp.big_map(tvalue=sp.TRecord(approvals=sp.TMap(sp.TAddress, sp.TNat), balance=sp.TNat)),
+            balances=sp.big_map(
+                tvalue=sp.TRecord(approvals=sp.TMap(sp.TAddress, sp.TNat), balance=sp.TNat)
+            ),
             totalSupply=0,
             # CHANGED: added snapshots BIGMAP
             snapshots=sp.big_map(
                 tkey=sp.TAddress,
-                tvalue=sp.TMap(sp.TNat, sp.TRecord(level=sp.TNat, balance=sp.TNat).layout(("level", "balance"))),
+                tvalue=sp.TMap(
+                    sp.TNat, sp.TRecord(level=sp.TNat, balance=sp.TNat).layout(("level", "balance"))
+                ),
             ),
             # CHANGED: added minting_disbaled
             mintingDisabled=False,
@@ -129,7 +133,9 @@ class FA12_core(sp.Contract, FA12_common):
 
     @sp.entry_point
     def approve(self, params):
-        sp.set_type(params, sp.TRecord(spender=sp.TAddress, value=sp.TNat).layout(("spender", "value")))
+        sp.set_type(
+            params, sp.TRecord(spender=sp.TAddress, value=sp.TNat).layout(("spender", "value"))
+        )
         self.addAddressIfNecessary(sp.sender)
         alreadyApproved = self.data.balances[sp.sender].approvals.get(params.spender, 0)
         sp.verify((alreadyApproved == 0) | (params.value == 0), FA12_Error.UnsafeAllowanceChange)
@@ -141,6 +147,7 @@ class FA12_core(sp.Contract, FA12_common):
 
     @sp.utils.view(sp.TNat)
     def getBalance(self, params):
+        sp.set_type(params, sp.TAddress)
         sp.if self.data.balances.contains(params):
             sp.result(self.data.balances[params].balance)
         sp.else:
@@ -148,6 +155,7 @@ class FA12_core(sp.Contract, FA12_common):
 
     @sp.utils.view(sp.TNat)
     def getAllowance(self, params):
+        sp.set_type(params, sp.TRecord(owner=sp.TAddress, spender=sp.TAddress))
         sp.if self.data.balances.contains(params.owner):
             sp.result(self.data.balances[params.owner].approvals.get(params.spender, 0))
         sp.else:
@@ -194,7 +202,7 @@ class FA12_snapshot(FA12_core):
             sp.result(sp.nat(0))
         sp.else:
             snapshots_map = self.data.snapshots[params.address]
-            
+
             # If requested level is greater than last level snapshot, return that
             sp.if params.level >= snapshots_map[sp.as_nat(sp.len(snapshots_map) - 1)].level:
                 sp.result(snapshots_map[sp.as_nat(sp.len(snapshots_map) - 1)].balance)
@@ -335,7 +343,11 @@ class Viewer(sp.Contract):
 
 # CHANGED: Removed Off-chain view testing class
 
-if "templates" not in __name__:
+if __name__ == "__main__":
+
+    ###############
+    # getBalanceAt
+    ###############
 
     @sp.add_test(name="getBalanceAt returns 0 when no snapshots are present")
     def test():
@@ -348,11 +360,10 @@ if "templates" not in __name__:
         scenario += viewer
 
         scenario += token.getBalanceAt(
-            (sp.record(level = 5, address = Addresses.ALICE), viewer.typed.target)
-        ).run(level = 10)
+            (sp.record(level=5, address=Addresses.ALICE), viewer.typed.target)
+        ).run(level=10)
 
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
-
 
     @sp.add_test(name="getBalanceAt reverts when unfinalized level is passed")
     def test():
@@ -368,11 +379,10 @@ if "templates" not in __name__:
         requestLevel = 5
 
         scenario += token.getBalanceAt(
-            (sp.record(level = requestLevel, address = Addresses.ALICE), viewer.typed.target)
-        ).run(level = currentLevel, valid = False)
-    
+            (sp.record(level=requestLevel, address=Addresses.ALICE), viewer.typed.target)
+        ).run(level=currentLevel, valid=False, exception=FA12_Error.BlockNotFinalized)
 
-    @sp.add_test('getBalance at returns 0 if requested level is before first snapshot')
+    @sp.add_test("getBalance at returns 0 if requested level is before first snapshot")
     def test():
         scenario = sp.test_scenario()
 
@@ -389,26 +399,23 @@ if "templates" not in __name__:
         currentLevel = 10
 
         # Mint tokens for ALICE at mintLevels
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  10
-        ).run(sender = Addresses.ADMIN, level = mintLevel1)
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  10
-        ).run(sender = Addresses.ADMIN, level = mintLevel2)
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  10
-        ).run(sender = Addresses.ADMIN, level = mintLevel3)
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(
+            sender=Addresses.ADMIN, level=mintLevel1
+        )
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(
+            sender=Addresses.ADMIN, level=mintLevel2
+        )
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(
+            sender=Addresses.ADMIN, level=mintLevel3
+        )
 
         scenario += token.getBalanceAt(
-            (sp.record(level = requestLevel, address = Addresses.ALICE), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=requestLevel, address=Addresses.ALICE), viewer.typed.target)
+        ).run(level=currentLevel)
 
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
-    @sp.add_test('getBalance returns last balance if requested level is after last snapshot')
+    @sp.add_test("getBalance returns last balance if requested level is after last snapshot")
     def test():
         scenario = sp.test_scenario()
 
@@ -418,25 +425,23 @@ if "templates" not in __name__:
         scenario += token
         scenario += viewer
 
-        requestLevel = 4 
+        requestLevel = 4
         mintLevel = 2
         currentLevel = 6
 
         # Mint tokens for ALICE at mintLevel
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  10
-        ).run(sender = Addresses.ADMIN, level = mintLevel)
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(
+            sender=Addresses.ADMIN, level=mintLevel
+        )
 
         scenario += token.getBalanceAt(
-            (sp.record(level = requestLevel, address = Addresses.ALICE), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=requestLevel, address=Addresses.ALICE), viewer.typed.target)
+        ).run(level=currentLevel)
 
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
-
     # Even number of snapshot: BASE SNAPSHOT + 5 TRANSFER SNAPSHOTS
-    @sp.add_test('getBalanceAt returns appropriate balance for even number of snapshots')
+    @sp.add_test("getBalanceAt returns appropriate balance for even number of snapshots")
     def test():
         scenario = sp.test_scenario()
 
@@ -447,49 +452,38 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
+        )
 
         # Alice transfers 10 tokens to BOB at 5 levels
         #
         # Level  |  Bob's Balance
         #   2           10
-        #   4           20      
+        #   4           20
         #   6           30
         #   8           40
         #  10           50
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 2)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=2
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 4)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=4
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 6)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=6
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 8)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=8
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 10)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=10
+        )
 
         # Verify number of snapshots taken for Bob (5 + 1 base snapshot)
         scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 6)
@@ -499,72 +493,72 @@ if "templates" not in __name__:
 
         # Level 1
         scenario += token.getBalanceAt(
-            (sp.record(level = 1, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=1, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
         # Level 2
         scenario += token.getBalanceAt(
-            (sp.record(level = 2, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=2, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 3
         scenario += token.getBalanceAt(
-            (sp.record(level = 3, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=3, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 4
         scenario += token.getBalanceAt(
-            (sp.record(level = 4, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=4, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 5
         scenario += token.getBalanceAt(
-            (sp.record(level = 5, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=5, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 6
         scenario += token.getBalanceAt(
-            (sp.record(level = 6, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=6, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 7
         scenario += token.getBalanceAt(
-            (sp.record(level = 7, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=7, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 8
         scenario += token.getBalanceAt(
-            (sp.record(level = 8, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=8, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 9
         scenario += token.getBalanceAt(
-            (sp.record(level = 9, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=9, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 10
         scenario += token.getBalanceAt(
-            (sp.record(level = 10, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=10, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(50))
 
         # Level 11
         scenario += token.getBalanceAt(
-            (sp.record(level = 11, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=11, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(50))
-    
+
     # Odd number of snapshots: BASE SNAPSHOT + 4 TRANSFER SNAPSHOTS
-    @sp.add_test('getBalanceAt returns appropriate balance for odd number of snapshots')
+    @sp.add_test("getBalanceAt returns appropriate balance for odd number of snapshots")
     def test():
         scenario = sp.test_scenario()
 
@@ -575,42 +569,33 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
+        )
 
         # Alice transfers 10 tokens to BOB at 4 levels
         #
         # Level  |  Bob's Balance
         #   2           10
-        #   4           20      
+        #   4           20
         #   6           30
         #   8           40
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 2)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=2
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 4)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=4
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 6)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=6
+        )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(sender = Addresses.ALICE, level = 8)
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=8
+        )
 
         # Verify number of snapshots taken for Bob (5 + 1 base snapshot)
         scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 5)
@@ -620,63 +605,63 @@ if "templates" not in __name__:
 
         # Level 1
         scenario += token.getBalanceAt(
-            (sp.record(level = 1, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=1, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
         # Level 2
         scenario += token.getBalanceAt(
-            (sp.record(level = 2, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=2, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 3
         scenario += token.getBalanceAt(
-            (sp.record(level = 3, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=3, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 4
         scenario += token.getBalanceAt(
-            (sp.record(level = 4, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=4, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 5
         scenario += token.getBalanceAt(
-            (sp.record(level = 5, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=5, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 6
         scenario += token.getBalanceAt(
-            (sp.record(level = 6, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=6, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 7
         scenario += token.getBalanceAt(
-            (sp.record(level = 7, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=7, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 8
         scenario += token.getBalanceAt(
-            (sp.record(level = 8, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=8, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 9
         scenario += token.getBalanceAt(
-            (sp.record(level = 9, address = Addresses.BOB), viewer.typed.target)
-        ).run(level = currentLevel)
+            (sp.record(level=9, address=Addresses.BOB), viewer.typed.target)
+        ).run(level=currentLevel)
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
     ##############################
     # Transfer tests for snapshots
     ##############################
 
-    @sp.add_test(name = "transfer takes the correct number of snapshots")
+    @sp.add_test(name="transfer takes the correct number of snapshots")
     def test():
         scenario = sp.test_scenario()
 
@@ -687,53 +672,43 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
+        )
 
         # ALICE transfers to BOB
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(
-            sender = Addresses.ALICE,
-            level = 2
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.ALICE, level=2
         )
 
         # Verify number of snapshots for ALICE, BOB & JOHN
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 3) # Base + mint + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2) # Base + transfer
-        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN)) # No snapshots
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
+        )  # Base + mint + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
+        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN))  # No snapshots
 
         # ALICE transfers to JOHN
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.JOHN,
-            value = 10
-        ).run(
-            sender = Addresses.ALICE,
-            level = 3
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.JOHN, value=10).run(
+            sender=Addresses.ALICE, level=3
         )
 
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4) # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2) # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2) # Base + transfer
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
+        )  # Base + mint + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
 
         # BOB transfers to JOHN
-        scenario += token.transfer(
-            from_ = Addresses.BOB,
-            to_ = Addresses.JOHN,
-            value = 10
-        ).run(
-            sender = Addresses.BOB,
-            level = 4
+        scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(
+            sender=Addresses.BOB, level=4
         )
 
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4) # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3) # Base + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3) # Base + 2 transfers
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
+        )  # Base + mint + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3)  # Base + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3)  # Base + 2 transfers
 
         # Correct history is recorded for ALICE
         scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
@@ -767,8 +742,8 @@ if "templates" not in __name__:
 
         scenario.verify(token.data.snapshots[Addresses.JOHN][2].balance == 20)
         scenario.verify(token.data.snapshots[Addresses.JOHN][2].level == 4)
-    
-    @sp.add_test(name = "transfer via approval takes the correct number of snapshots")
+
+    @sp.add_test(name="transfer via approval takes the correct number of snapshots")
     def test():
         scenario = sp.test_scenario()
 
@@ -779,69 +754,49 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
+        )
 
         # Alice approves BOB
-        scenario += token.approve(
-            spender = Addresses.BOB,
-            value = 100
-        ).run(
-            sender = Addresses.ALICE
-        )
+        scenario += token.approve(spender=Addresses.BOB, value=100).run(sender=Addresses.ALICE)
 
         # BOB approves JOHN
-        scenario += token.approve(
-            spender = Addresses.JOHN,
-            value = 100
-        ).run(
-            sender = Addresses.BOB
-        )
+        scenario += token.approve(spender=Addresses.JOHN, value=100).run(sender=Addresses.BOB)
 
         # BOB transfer from ALICE to himself
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 10
-        ).run(
-            sender = Addresses.BOB,
-            level = 2
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
+            sender=Addresses.BOB, level=2
         )
 
         # Verify number of snapshots for ALICE, BOB & JOHN
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 3) # Base + mint + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2) # Base + transfer
-        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN)) # No snapshots
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
+        )  # Base + mint + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
+        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN))  # No snapshots
 
         # BOB transfers from ALICE to JOHN
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.JOHN,
-            value = 10
-        ).run(
-            sender = Addresses.BOB,
-            level = 3
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.JOHN, value=10).run(
+            sender=Addresses.BOB, level=3
         )
 
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4) # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2) # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2) # Base + transfer
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
+        )  # Base + mint + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
 
         # JOHN transfer from BOB to himself
-        scenario += token.transfer(
-            from_ = Addresses.BOB,
-            to_ = Addresses.JOHN,
-            value = 10
-        ).run(
-            sender = Addresses.JOHN,
-            level = 4
+        scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(
+            sender=Addresses.JOHN, level=4
         )
 
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4) # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3) # Base + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3) # Base + 2 transfers
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
+        )  # Base + mint + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3)  # Base + 2 transfers
+        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3)  # Base + 2 transfers
 
         # Correct history is recorded for ALICE
         scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
@@ -876,7 +831,7 @@ if "templates" not in __name__:
         scenario.verify(token.data.snapshots[Addresses.JOHN][2].balance == 20)
         scenario.verify(token.data.snapshots[Addresses.JOHN][2].level == 4)
 
-    @sp.add_test(name = "transfer does not take 2 snapshots for same level")
+    @sp.add_test(name="transfer does not take 2 snapshots for same level")
     def test():
         scenario = sp.test_scenario()
 
@@ -887,44 +842,30 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
-
-        # ALICE transfers to BOB twice and same level
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 20
-        ).run(
-            sender = Addresses.ALICE,
-            level = 2
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
         )
 
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.BOB,
-            value = 30
-        ).run(
-            sender = Addresses.ALICE,
-            level = 2
+        # ALICE transfers to BOB twice and same level
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=20).run(
+            sender=Addresses.ALICE, level=2
+        )
+
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=30).run(
+            sender=Addresses.ALICE, level=2
         )
 
         # ALICE transfers to JOHN at same level
-        scenario += token.transfer(
-            from_ = Addresses.ALICE,
-            to_ = Addresses.JOHN,
-            value = 50
-        ).run(
-            sender = Addresses.ALICE,
-            level = 2
+        scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.JOHN, value=50).run(
+            sender=Addresses.ALICE, level=2
         )
 
         # Verify number of snapshots
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 3) # Base + Mint + transfer 
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2) # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2) # Base + transfer
+        scenario.verify(
+            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
+        )  # Base + Mint + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
+        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
 
         # ALICE has the correct history
         scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
@@ -935,7 +876,6 @@ if "templates" not in __name__:
 
         scenario.verify(token.data.snapshots[Addresses.ALICE][2].balance == 0)
         scenario.verify(token.data.snapshots[Addresses.ALICE][2].level == 2)
-
 
         # BOB has correct history
         scenario.verify(token.data.snapshots[Addresses.BOB][0].balance == 0)
@@ -952,9 +892,9 @@ if "templates" not in __name__:
         scenario.verify(token.data.snapshots[Addresses.JOHN][1].level == 2)
 
     ################
-    # Minting tests 
+    # Minting tests
     ################
-    @sp.add_test(name = "snapshots are taken correctly for multiple mints")
+    @sp.add_test(name="snapshots are taken correctly for multiple mints")
     def test():
         scenario = sp.test_scenario()
 
@@ -965,23 +905,20 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 1)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=1
+        )
 
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 3)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=3
+        )
 
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN, level = 5)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, level=5
+        )
 
         # Verify number of snapshots
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4) # Base + 3 mints
+        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4)  # Base + 3 mints
 
         # ALICE has correct history
         scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
@@ -996,7 +933,7 @@ if "templates" not in __name__:
         scenario.verify(token.data.snapshots[Addresses.ALICE][3].balance == 300)
         scenario.verify(token.data.snapshots[Addresses.ALICE][3].level == 5)
 
-    @sp.add_test(name = "not allowed to mint when minting is disabled")
+    @sp.add_test(name="not allowed to mint when minting is disabled")
     def test():
         scenario = sp.test_scenario()
 
@@ -1007,24 +944,17 @@ if "templates" not in __name__:
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(sender = Addresses.ADMIN)
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN)
 
         # Disable mint
-        scenario += token.disableMint().run(sender = Addresses.ADMIN)
+        scenario += token.disableMint().run(sender=Addresses.ADMIN)
 
         # Mint after disabling
-        scenario += token.mint(
-            address = Addresses.ALICE,
-            value = 100
-        ).run(
-            sender = Addresses.ADMIN,
-            valid = False
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.ADMIN, valid=False, exception=FA12_Error.MintingDisabled
         )
-    
-    @sp.add_test(name = "only admin can mint and disable minting")
+
+    @sp.add_test(name="only admin can mint and disable minting")
     def test():
         scenario = sp.test_scenario()
 
@@ -1035,16 +965,14 @@ if "templates" not in __name__:
         scenario += viewer
 
         # BOB tries to mint tokens for ALICE
-        scenario += token.mint(
-            address = Addresses.ALICE, 
-            value =  100
-        ).run(
-            sender = Addresses.BOB,
-            valid = False
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(
+            sender=Addresses.BOB, valid=False, exception=FA12_Error.NotAdmin
         )
 
         # BOB tries to disable minting
-        scenario += token.disableMint().run(sender = Addresses.BOB, valid = False)
+        scenario += token.disableMint().run(
+            sender=Addresses.BOB, valid=False, exception=FA12_Error.NotAdmin
+        )
 
     # Original SmartPy test suite
     @sp.add_test(name="Smartpy tests")
@@ -1057,12 +985,12 @@ if "templates" not in __name__:
         # sp.test_account generates ED25519 key-pairs deterministically:
         admin = sp.test_account("Administrator")
         alice = sp.test_account("Alice")
-        bob   = sp.test_account("Robert")
+        bob = sp.test_account("Robert")
 
         # Let's display the accounts:
         scenario.h1("Accounts")
         scenario.show([admin, alice, bob])
-        
+
         # CHANGED: removed existing token and contract metadata
         c1 = FA12(
             admin.address,
@@ -1073,27 +1001,28 @@ if "templates" not in __name__:
 
         scenario.h1("Attempt to update metadata")
         scenario.verify(
-            c1.data.metadata[""] == sp.utils.bytes_of_string("ipfs://QmNaR3WbYeddJvsU5E1BiooEy24ejSMTAFUkppDsyu8rxV")
+            c1.data.metadata[""]
+            == sp.utils.bytes_of_string("ipfs://QmNaR3WbYeddJvsU5E1BiooEy24ejSMTAFUkppDsyu8rxV")
         )
-        c1.update_metadata(key = "", value = sp.bytes("0x00")).run(sender = admin)
+        c1.update_metadata(key="", value=sp.bytes("0x00")).run(sender=admin)
         scenario.verify(c1.data.metadata[""] == sp.bytes("0x00"))
 
         scenario.h1("Entry points")
         scenario.h2("Admin mints a few coins")
-        c1.mint(address = alice.address, value = 12).run(sender = admin)
-        c1.mint(address = alice.address, value = 3).run(sender = admin)
-        c1.mint(address = alice.address, value = 3).run(sender = admin)
+        c1.mint(address=alice.address, value=12).run(sender=admin)
+        c1.mint(address=alice.address, value=3).run(sender=admin)
+        c1.mint(address=alice.address, value=3).run(sender=admin)
         scenario.h2("Alice transfers to Bob")
-        c1.transfer(from_ = alice.address, to_ = bob.address, value = 4).run(sender = alice)
+        c1.transfer(from_=alice.address, to_=bob.address, value=4).run(sender=alice)
         scenario.verify(c1.data.balances[alice.address].balance == 14)
         scenario.h2("Bob tries to transfer from Alice but he doesn't have her approval")
-        c1.transfer(from_ = alice.address, to_ = bob.address, value = 4).run(sender = bob, valid = False)
+        c1.transfer(from_=alice.address, to_=bob.address, value=4).run(sender=bob, valid=False)
         scenario.h2("Alice approves Bob and Bob transfers")
-        c1.approve(spender = bob.address, value = 5).run(sender = alice)
-        c1.transfer(from_ = alice.address, to_ = bob.address, value = 4).run(sender = bob)
+        c1.approve(spender=bob.address, value=5).run(sender=alice)
+        c1.transfer(from_=alice.address, to_=bob.address, value=4).run(sender=bob)
         scenario.h2("Bob tries to over-transfer from Alice")
-        c1.transfer(from_ = alice.address, to_ = bob.address, value = 4).run(sender = bob, valid = False)
-        
+        c1.transfer(from_=alice.address, to_=bob.address, value=4).run(sender=bob, valid=False)
+
         # CHANGED: removed burning & pause test
 
         # CHANGED: modified equality values accordingly
@@ -1123,7 +1052,9 @@ if "templates" not in __name__:
         scenario.h2("Allowance")
         view_allowance = Viewer(sp.TNat)
         scenario += view_allowance
-        c1.getAllowance((sp.record(owner = alice.address, spender = bob.address), view_allowance.typed.target))
+        c1.getAllowance(
+            (sp.record(owner=alice.address, spender=bob.address), view_allowance.typed.target)
+        )
         scenario.verify_equal(view_allowance.data.last, sp.some(1))
 
     sp.add_compilation_target("fa12_token", FA12())
