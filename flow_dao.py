@@ -36,11 +36,29 @@ GOVERNANCE_PARAMETERS = sp.record(
 
 # Proposal buffer type to be used during callback execution
 PROPOSAL_BUFFER = sp.TRecord(
-    sender=sp.TAddress, proposal_metadata=sp.TString, proposal_lambda=Proposal.PROPOSAL_LAMBDA
+    sender=sp.TAddress,
+    proposal_metadata=sp.TString,
+    proposal_lambda=Proposal.PROPOSAL_LAMBDA,
+).layout(
+    (
+        "sender",
+        (
+            "proposal_metadata",
+            "proposal_lambda",
+        ),
+    )
 )
 
 # Voting buffer type to be used during callback execution
-VOTING_BUFFER = sp.TRecord(sender=sp.TAddress, proposal_id=sp.TNat, vote_value=sp.TNat)
+VOTING_BUFFER = sp.TRecord(sender=sp.TAddress, proposal_id=sp.TNat, vote_value=sp.TNat).layout(
+    (
+        "sender",
+        (
+            "proposal_id",
+            "vote_value",
+        ),
+    )
+)
 
 
 ###########
@@ -102,7 +120,9 @@ class FlowDAO(sp.Contract):
     def register_proposal(self, params):
         sp.set_type(
             params,
-            sp.TRecord(proposal_metadata=sp.TString, proposal_lambda=Proposal.PROPOSAL_LAMBDA),
+            sp.TRecord(
+                proposal_metadata=sp.TString, proposal_lambda=Proposal.PROPOSAL_LAMBDA
+            ).layout(("proposal_metadata", "proposal_lambda")),
         )
 
         # Update proposal buffer
@@ -119,7 +139,10 @@ class FlowDAO(sp.Contract):
 
         # Call token contract
         c = sp.contract(
-            sp.TPair(sp.TRecord(address=sp.TAddress, level=sp.TNat), sp.TContract(sp.TNat)),
+            sp.TPair(
+                sp.TRecord(address=sp.TAddress, level=sp.TNat).layout(("address", "level")),
+                sp.TContract(sp.TNat),
+            ),
             self.data.token_address,
             "getBalanceAt",
         ).open_some()
@@ -205,7 +228,12 @@ class FlowDAO(sp.Contract):
 
     @sp.entry_point
     def vote(self, params):
-        sp.set_type(params, sp.TRecord(proposal_id=sp.TNat, vote_value=sp.TNat))
+        sp.set_type(
+            params,
+            sp.TRecord(proposal_id=sp.TNat, vote_value=sp.TNat).layout(
+                ("proposal_id", "vote_value")
+            ),
+        )
         sp.verify(self.data.proposals.contains(params.proposal_id), Errors.INVALID_PROPOSAL_ID)
 
         proposal = self.data.proposals[params.proposal_id]
@@ -227,7 +255,10 @@ class FlowDAO(sp.Contract):
 
         # Call token contract
         c = sp.contract(
-            sp.TPair(sp.TRecord(address=sp.TAddress, level=sp.TNat), sp.TContract(sp.TNat)),
+            sp.TPair(
+                sp.TRecord(address=sp.TAddress, level=sp.TNat).layout(("address", "level")),
+                sp.TContract(sp.TNat),
+            ),
             self.data.token_address,
             "getBalanceAt",
         ).open_some()
@@ -306,7 +337,6 @@ class FlowDAO(sp.Contract):
         sp.verify(sp.sender == sp.self_address, Errors.NOT_ALLOWED)
 
         self.data.governance_parameters = params
-
 
 
 # Helper viewer class
@@ -1006,5 +1036,6 @@ if __name__ == "__main__":
                 proposal_threshold=100_000 * DECIMALS,
             )
         ).run(sender=Addresses.ALICE, valid=False, exception=Errors.NOT_ALLOWED)
+
 
 sp.add_compilation_target("flow_dao", FlowDAO())

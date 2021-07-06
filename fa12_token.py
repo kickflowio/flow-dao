@@ -194,7 +194,9 @@ class FA12_snapshot(FA12_core):
     # Allows viewing of an address's balance at a certain level
     @sp.utils.view(sp.TNat)
     def getBalanceAt(self, params):
-        sp.set_type(params, sp.TRecord(address=sp.TAddress, level=sp.TNat))
+        sp.set_type(
+            params, sp.TRecord(address=sp.TAddress, level=sp.TNat).layout(("address", "level"))
+        )
 
         sp.verify(params.level < sp.level, FA12_Error.BlockNotFinalized)
 
