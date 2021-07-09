@@ -75,6 +75,11 @@ class FlowDAO(sp.Contract):
             tkey=sp.TNat,
             tvalue=Proposal.PROPOSAL_TYPE,
         ),
+        voters=sp.big_map(
+            l={},
+            tkey=sp.TPair(sp.TAddress, sp.TNat),
+            tvalue=sp.TRecord(votes=sp.TNat, value=sp.TNat).layout(("votes", "value")),
+        ),
         token_address=Addresses.TOKEN,
         state=STATE_IDLE,
         proposal_buffer=sp.none,
@@ -97,6 +102,10 @@ class FlowDAO(sp.Contract):
                 governance_parameters=DAO.GOVERNANCE_PARAMETERS_TYPE,
                 uuid=sp.TNat,
                 proposals=sp.TBigMap(sp.TNat, Proposal.PROPOSAL_TYPE),
+                voters=sp.TBigMap(
+                    sp.TPair(sp.TAddress, sp.TNat),
+                    sp.TRecord(votes=sp.TNat, value=sp.TNat).layout(("votes", "value")),
+                ),
                 token_address=sp.TAddress,
                 state=sp.TNat,
                 proposal_buffer=sp.TOption(PROPOSAL_BUFFER),
@@ -109,6 +118,7 @@ class FlowDAO(sp.Contract):
             governance_parameters=governance_parameters,
             uuid=sp.nat(0),
             proposals=proposals,
+            voters=voters,
             token_address=token_address,
             state=state,
             proposal_buffer=proposal_buffer,
@@ -177,7 +187,6 @@ class FlowDAO(sp.Contract):
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata=buffer_value.proposal_metadata,
             proposal_lambda=buffer_value.proposal_lambda,
             proposal_timelock=sp.record(ending=sp.timestamp(0), activated=False),
@@ -241,7 +250,7 @@ class FlowDAO(sp.Contract):
         # Sanity checks
         sp.verify(proposal.status == Proposal.PROPOSAL_STATUS_VOTING, Errors.VOTING_ALREADY_ENDED)
         sp.verify(sp.now < proposal.voting_end, Errors.VOTING_ALREADY_ENDED)
-        sp.verify(~proposal.voters.contains(sp.sender), Errors.ALREADY_VOTED)
+        sp.verify(~self.data.voters.contains((sp.sender, params.proposal_id)), Errors.ALREADY_VOTED)
 
         # Put params in voting buffer
         self.data.voting_buffer = sp.some(
@@ -289,8 +298,8 @@ class FlowDAO(sp.Contract):
 
         proposal = self.data.proposals[buffer_value.proposal_id]
 
-        # Add voter to proposal's voters map
-        proposal.voters[buffer_value.sender] = sp.record(
+        # Add voter to voters big_map
+        self.data.voters[(buffer_value.sender, buffer_value.proposal_id)] = sp.record(
             votes=balance, value=buffer_value.vote_value
         )
 
@@ -396,7 +405,6 @@ if __name__ == "__main__":
         # Verify if the proposal has correct fields
         scenario.verify(proposal.up_votes == 0)
         scenario.verify(proposal.down_votes == 0)
-        scenario.verify(sp.len(proposal.voters) == 0)
         scenario.verify(proposal.proposal_metadata == proposal_metadata)
         scenario.verify(proposal.creator == Addresses.ALICE)
         scenario.verify(proposal.origin_level == 2)
@@ -507,14 +515,13 @@ if __name__ == "__main__":
     # end_voting
     #############
 
-    @sp.add_test("end_voting activates timelock for a proposal passing the vote")
+    @sp.add_test(name="end_voting activates timelock for a proposal passing the vote")
     def test():
         scenario = sp.test_scenario()
 
         proposal = sp.record(
             up_votes=100_001 * DECIMALS,
             down_votes=100_000 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -539,7 +546,7 @@ if __name__ == "__main__":
         scenario.verify(timelock.ending == sp.timestamp(1 * DAY + 1))
         scenario.verify(dao.data.proposals[1].status == Proposal.PROPOSAL_STATUS_TIMELOCKED)
 
-    @sp.add_test("end_voting rejects a proposal not passing the vote")
+    @sp.add_test(name="end_voting rejects a proposal not passing the vote")
     def test():
         scenario = sp.test_scenario()
 
@@ -547,7 +554,6 @@ if __name__ == "__main__":
         proposal_1 = sp.record(
             up_votes=99_999 * DECIMALS,
             down_votes=100_000 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -561,7 +567,6 @@ if __name__ == "__main__":
         proposal_2 = sp.record(
             up_votes=100_000 * DECIMALS,
             down_votes=100_001 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -596,7 +601,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=100_001 * DECIMALS,
             down_votes=100_000 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -622,7 +626,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=100_001 * DECIMALS,
             down_votes=100_000 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -648,7 +651,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=100_001 * DECIMALS,
             down_votes=100_000 * DECIMALS,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -678,7 +680,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -707,22 +708,21 @@ if __name__ == "__main__":
             sender=Addresses.BOB, level=3, now=sp.timestamp(0)
         )
 
-        voters = dao.data.proposals[1].voters
-
-        # Verify number of voters
-        scenario.verify(sp.len(voters) == 2)
+        # Verify that voters big_map contains the voters with correct votes
+        scenario.verify(dao.data.voters.contains((Addresses.ALICE, 1)))
+        scenario.verify(
+            dao.data.voters[(Addresses.ALICE, 1)]
+            == sp.record(votes=20_000 * DECIMALS, value=Proposal.VOTE_VALUE_UPVOTE)
+        )
+        scenario.verify(dao.data.voters.contains((Addresses.BOB, 1)))
+        scenario.verify(
+            dao.data.voters[(Addresses.BOB, 1)]
+            == sp.record(votes=10_000 * DECIMALS, value=Proposal.VOTE_VALUE_DOWNVOTE)
+        )
 
         # Verify proposal field values
         scenario.verify(dao.data.proposals[1].up_votes == 20_000 * DECIMALS)
         scenario.verify(dao.data.proposals[1].down_votes == 10_000 * DECIMALS)
-        scenario.verify(
-            voters[Addresses.ALICE]
-            == sp.record(votes=20_000 * DECIMALS, value=Proposal.VOTE_VALUE_UPVOTE)
-        )
-        scenario.verify(
-            voters[Addresses.BOB]
-            == sp.record(votes=10_000 * DECIMALS, value=Proposal.VOTE_VALUE_DOWNVOTE)
-        )
 
         # Verify state machine value
         scenario.verify(dao.data.state == STATE_IDLE)
@@ -734,7 +734,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -765,7 +764,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={Addresses.ALICE: sp.record(votes=1, value=Proposal.VOTE_VALUE_UPVOTE)},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -775,7 +773,12 @@ if __name__ == "__main__":
             status=Proposal.PROPOSAL_STATUS_VOTING,
         )
 
-        dao = FlowDAO(proposals=sp.big_map(l={1: proposal}))
+        dao = FlowDAO(
+            proposals=sp.big_map(l={1: proposal}),
+            voters=sp.big_map(
+                l={(Addresses.ALICE, 1): sp.record(votes=100, value=Proposal.VOTE_VALUE_UPVOTE)}
+            ),
+        )
 
         scenario += dao
 
@@ -791,7 +794,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -824,7 +826,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=sp.build_lambda(lambda x: sp.list(l=[], t=sp.TOperation)),
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -883,7 +884,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=proposal_lambda,
             proposal_timelock=sp.record(activated=True, ending=sp.timestamp(0)),
@@ -926,7 +926,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=proposal_lambda,
             proposal_timelock=sp.record(activated=True, ending=sp.timestamp(2)),
@@ -960,7 +959,6 @@ if __name__ == "__main__":
         proposal = sp.record(
             up_votes=0,
             down_votes=0,
-            voters={},
             proposal_metadata="ipfs://xyz",
             proposal_lambda=proposal_lambda,
             proposal_timelock=sp.record(activated=False, ending=sp.timestamp(0)),
@@ -1037,5 +1035,4 @@ if __name__ == "__main__":
             )
         ).run(sender=Addresses.ALICE, valid=False, exception=Errors.NOT_ALLOWED)
 
-
-sp.add_compilation_target("flow_dao", FlowDAO())
+    sp.add_compilation_target("flow_dao", FlowDAO())

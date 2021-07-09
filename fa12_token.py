@@ -72,6 +72,9 @@ class FA12_common:
         return meta
 
 
+# CHANGE: All sp.if, sp.else, sp.while replaced with desugared version for linting
+
+
 class FA12_core(sp.Contract, FA12_common):
     def __init__(self, config, **extra_storage):
         self.config = config
@@ -83,11 +86,11 @@ class FA12_core(sp.Contract, FA12_common):
             totalSupply=0,
             # CHANGED: added snapshots BIGMAP
             snapshots=sp.big_map(
-                tkey=sp.TAddress,
-                tvalue=sp.TMap(
-                    sp.TNat, sp.TRecord(level=sp.TNat, balance=sp.TNat).layout(("level", "balance"))
-                ),
+                tkey=sp.TPair(sp.TAddress, sp.TNat),
+                tvalue=sp.TRecord(level=sp.TNat, balance=sp.TNat).layout(("level", "balance")),
             ),
+            # CHANGED: added numSnapshots BIGMAP
+            numSnapshots=sp.big_map(tkey=sp.TAddress, tvalue=sp.TNat),
             # CHANGED: added minting_disbaled
             mintingDisabled=False,
             **extra_storage
@@ -126,7 +129,7 @@ class FA12_core(sp.Contract, FA12_common):
         # CHANGE: take to_ address snapshot
         self.takeSnapshot(params.to_)
 
-        sp.if params.from_ != sp.sender:
+        with sp.if_(params.from_ != sp.sender):
             self.data.balances[params.from_].approvals[sp.sender] = sp.as_nat(
                 self.data.balances[params.from_].approvals[sp.sender] - params.value
             )
@@ -142,23 +145,23 @@ class FA12_core(sp.Contract, FA12_common):
         self.data.balances[sp.sender].approvals[params.spender] = params.value
 
     def addAddressIfNecessary(self, address):
-        sp.if ~self.data.balances.contains(address):
+        with sp.if_(~self.data.balances.contains(address)):
             self.data.balances[address] = sp.record(balance=0, approvals={})
 
     @sp.utils.view(sp.TNat)
     def getBalance(self, params):
         sp.set_type(params, sp.TAddress)
-        sp.if self.data.balances.contains(params):
+        with sp.if_(self.data.balances.contains(params)):
             sp.result(self.data.balances[params].balance)
-        sp.else:
+        with sp.else_():
             sp.result(sp.nat(0))
 
     @sp.utils.view(sp.TNat)
     def getAllowance(self, params):
         sp.set_type(params, sp.TRecord(owner=sp.TAddress, spender=sp.TAddress))
-        sp.if self.data.balances.contains(params.owner):
+        with sp.if_(self.data.balances.contains(params.owner)):
             sp.result(self.data.balances[params.owner].approvals.get(params.spender, 0))
-        sp.else:
+        with sp.else_():
             sp.result(sp.nat(0))
 
     @sp.utils.view(sp.TNat)
@@ -177,19 +180,23 @@ class FA12_snapshot(FA12_core):
         sp.set_type(address, sp.TAddress)
 
         # Add a base level balance snapshot if not already present
-        sp.if ~self.data.snapshots.contains(address):
-            self.data.snapshots[address] = {0: sp.record(level=0, balance=0)}
-
-        snapshots_map = self.data.snapshots[address]
-        map_length = sp.len(snapshots_map)
+        with sp.if_(~self.data.numSnapshots.contains(address)):
+            self.data.numSnapshots[address] = 1
+            self.data.snapshots[(address, 0)] = sp.record(level=0, balance=0)
 
         # If the a snapshot is already taken at the same level, simply overwrite it
-        sp.if snapshots_map[sp.as_nat(map_length - 1)].level == sp.level:
-            snapshots_map[sp.as_nat(map_length - 1)].balance = self.data.balances[address].balance
-        sp.else:
-            snapshots_map[map_length] = sp.record(
+        with sp.if_(
+            self.data.snapshots[(address, sp.as_nat(self.data.numSnapshots[address] - 1))].level
+            == sp.level
+        ):
+            self.data.snapshots[
+                (address, sp.as_nat(self.data.numSnapshots[address] - 1))
+            ].balance = self.data.balances[address].balance
+        with sp.else_():
+            self.data.snapshots[(address, self.data.numSnapshots[address])] = sp.record(
                 level=sp.level, balance=self.data.balances[address].balance
             )
+            self.data.numSnapshots[address] += 1
 
     # Allows viewing of an address's balance at a certain level
     @sp.utils.view(sp.TNat)
@@ -200,30 +207,44 @@ class FA12_snapshot(FA12_core):
 
         sp.verify(params.level < sp.level, FA12_Error.BlockNotFinalized)
 
-        sp.if ~self.data.snapshots.contains(params.address):
+        with sp.if_(~self.data.numSnapshots.contains(params.address)):
             sp.result(sp.nat(0))
-        sp.else:
-            snapshots_map = self.data.snapshots[params.address]
-
+        with sp.else_():
             # If requested level is greater than last level snapshot, return that
-            sp.if params.level >= snapshots_map[sp.as_nat(sp.len(snapshots_map) - 1)].level:
-                sp.result(snapshots_map[sp.as_nat(sp.len(snapshots_map) - 1)].balance)
-            sp.else:
+            with sp.if_(
+                params.level
+                >= self.data.snapshots[
+                    (params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))
+                ].level
+            ):
+                sp.result(
+                    self.data.snapshots[
+                        (params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))
+                    ].balance
+                )
+            with sp.else_():
                 # Binary search the appropriate snapshot
                 low = sp.local("low", sp.nat(0))
-                high = sp.local("high", sp.as_nat(sp.len(snapshots_map) - 2))
+                high = sp.local("high", sp.as_nat(self.data.numSnapshots[params.address] - 2))
                 mid = sp.local("mid", sp.nat(0))
 
-                sp.while (low.value < high.value) & (snapshots_map[mid.value].level != params.level):
+                with sp.while_(
+                    (low.value < high.value)
+                    & (self.data.snapshots[(params.address, mid.value)].level != params.level)
+                ):
                     mid.value = (low.value + high.value + 1) // 2
-                    sp.if snapshots_map[mid.value].level > params.level:
+                    with sp.if_(
+                        self.data.snapshots[(params.address, mid.value)].level > params.level
+                    ):
                         high.value = sp.as_nat(mid.value - 1)
-                    sp.if snapshots_map[mid.value].level < params.level:
+                    with sp.if_(
+                        self.data.snapshots[(params.address, mid.value)].level < params.level
+                    ):
                         low.value = mid.value
-                sp.if snapshots_map[mid.value].level == params.level:
-                    sp.result(snapshots_map[mid.value].balance)
-                sp.else:
-                    sp.result(snapshots_map[low.value].balance)
+                with sp.if_(self.data.snapshots[(params.address, mid.value)].level == params.level):
+                    sp.result(self.data.snapshots[(params.address, mid.value)].balance)
+                with sp.else_():
+                    sp.result(self.data.snapshots[(params.address, low.value)].balance)
 
 
 class FA12_mint(FA12_core):
@@ -488,7 +509,7 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots taken for Bob (5 + 1 base snapshot)
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 6)
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 6)
 
         # Verify balance snapshot from level 1 -> 11
         currentLevel = 12
@@ -600,7 +621,7 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots taken for Bob (5 + 1 base snapshot)
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 5)
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 5)
 
         # Verify balance snapshot from level 1 -> 9
         currentLevel = 12
@@ -684,66 +705,60 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots for ALICE, BOB & JOHN
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
-        )  # Base + mint + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
-        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN))  # No snapshots
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 3)  # Base + mint + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 2)  # Base + transfer
+        scenario.verify(~token.data.numSnapshots.contains(Addresses.JOHN))  # No snapshots
 
         # ALICE transfers to JOHN
         scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.JOHN, value=10).run(
             sender=Addresses.ALICE, level=3
         )
 
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
-        )  # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + mint + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 2)  # Base + transfer
 
         # BOB transfers to JOHN
         scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(
             sender=Addresses.BOB, level=4
         )
 
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
-        )  # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3)  # Base + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3)  # Base + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + mint + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 3)  # Base + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 3)  # Base + 2 transfers
 
         # Correct history is recorded for ALICE
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].balance == 100)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].level == 1)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].balance == 100)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].level == 1)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].balance == 90)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].balance == 90)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].level == 2)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].balance == 80)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].level == 3)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].balance == 80)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].level == 3)
 
         # Correct history is recorded for BOB
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].balance == 10)
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].balance == 10)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].level == 2)
 
-        scenario.verify(token.data.snapshots[Addresses.BOB][2].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.BOB][2].level == 4)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 2)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 2)].level == 4)
 
         # Correct history is recorded for JOHN
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].balance == 10)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].level == 3)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].balance == 10)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].level == 3)
 
-        scenario.verify(token.data.snapshots[Addresses.JOHN][2].balance == 20)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][2].level == 4)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 2)].balance == 20)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 2)].level == 4)
 
     @sp.add_test(name="transfer via approval takes the correct number of snapshots")
     def test():
@@ -772,66 +787,60 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots for ALICE, BOB & JOHN
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
-        )  # Base + mint + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
-        scenario.verify(~token.data.snapshots.contains(Addresses.JOHN))  # No snapshots
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 3)  # Base + mint + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 2)  # Base + transfer
+        scenario.verify(~token.data.numSnapshots.contains(Addresses.JOHN))  # No snapshots
 
         # BOB transfers from ALICE to JOHN
         scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.JOHN, value=10).run(
             sender=Addresses.BOB, level=3
         )
 
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
-        )  # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + mint + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 2)  # Base + transfer
 
         # JOHN transfer from BOB to himself
         scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(
             sender=Addresses.JOHN, level=4
         )
 
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 4
-        )  # Base + mint + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 3)  # Base + 2 transfers
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 3)  # Base + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + mint + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 3)  # Base + 2 transfers
+        scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 3)  # Base + 2 transfers
 
         # Correct history is recorded for ALICE
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].balance == 100)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].level == 1)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].balance == 100)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].level == 1)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].balance == 90)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].balance == 90)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].level == 2)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].balance == 80)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].level == 3)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].balance == 80)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].level == 3)
 
         # Correct history is recorded for BOB
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].balance == 10)
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].balance == 10)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].level == 2)
 
-        scenario.verify(token.data.snapshots[Addresses.BOB][2].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.BOB][2].level == 4)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 2)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 2)].level == 4)
 
         # Correct history is recorded for JOHN
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].balance == 10)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].level == 3)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].balance == 10)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].level == 3)
 
-        scenario.verify(token.data.snapshots[Addresses.JOHN][2].balance == 20)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][2].level == 4)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 2)].balance == 20)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 2)].level == 4)
 
     @sp.add_test(name="transfer does not take 2 snapshots for same level")
     def test():
@@ -863,35 +872,33 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots
-        scenario.verify(
-            sp.len(token.data.snapshots[Addresses.ALICE]) == 3
-        )  # Base + Mint + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.BOB]) == 2)  # Base + transfer
-        scenario.verify(sp.len(token.data.snapshots[Addresses.JOHN]) == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 3)  # Base + Mint + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.BOB] == 2)  # Base + transfer
+        scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 2)  # Base + transfer
 
         # ALICE has the correct history
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].balance == 100)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].level == 1)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].balance == 100)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].level == 1)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].level == 2)
 
         # BOB has correct history
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.BOB][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].balance == 50)
-        scenario.verify(token.data.snapshots[Addresses.BOB][1].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].balance == 50)
+        scenario.verify(token.data.snapshots[(Addresses.BOB, 1)].level == 2)
 
         # JOHN has correct history
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].balance == 50)
-        scenario.verify(token.data.snapshots[Addresses.JOHN][1].level == 2)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].balance == 50)
+        scenario.verify(token.data.snapshots[(Addresses.JOHN, 1)].level == 2)
 
     ################
     # Minting tests
@@ -920,20 +927,20 @@ if __name__ == "__main__":
         )
 
         # Verify number of snapshots
-        scenario.verify(sp.len(token.data.snapshots[Addresses.ALICE]) == 4)  # Base + 3 mints
+        scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + 3 mints
 
         # ALICE has correct history
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].balance == 0)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][0].level == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].balance == 0)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 0)].level == 0)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].balance == 100)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][1].level == 1)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].balance == 100)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 1)].level == 1)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].balance == 200)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][2].level == 3)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].balance == 200)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 2)].level == 3)
 
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].balance == 300)
-        scenario.verify(token.data.snapshots[Addresses.ALICE][3].level == 5)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].balance == 300)
+        scenario.verify(token.data.snapshots[(Addresses.ALICE, 3)].level == 5)
 
     @sp.add_test(name="not allowed to mint when minting is disabled")
     def test():

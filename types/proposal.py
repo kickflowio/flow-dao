@@ -13,7 +13,6 @@ PROPOSAL_TIMELOCK = sp.TRecord(
 # params:
 #   up_votes           : Number of votes in favour of the proposal
 #   down_votes         : Number of votes against the proposal
-#   voters             : mapping of voter address => number of votes
 #   proposal_metadata  : IPFS hash of metadata for the proposal
 #   proposal_lambda    : The lambda to be executed if proposal vote goes through
 #   proposal_timelock  : The timelock on the proposal execution
@@ -24,7 +23,6 @@ PROPOSAL_TIMELOCK = sp.TRecord(
 PROPOSAL_TYPE = sp.TRecord(
     up_votes=sp.TNat,
     down_votes=sp.TNat,
-    voters=sp.TMap(sp.TAddress, sp.TRecord(votes=sp.TNat, value=sp.TNat)),
     proposal_metadata=sp.TString,
     proposal_lambda=PROPOSAL_LAMBDA,
     proposal_timelock=PROPOSAL_TIMELOCK,
@@ -38,21 +36,18 @@ PROPOSAL_TYPE = sp.TRecord(
         (
             "down_votes",
             (
-                "voters",
+                "proposal_metadata",
                 (
-                    "proposal_metadata",
+                    "proposal_lambda",
                     (
-                        "proposal_lambda",
+                        "proposal_timelock",
                         (
-                            "proposal_timelock",
+                            "voting_end",
                             (
-                                "voting_end",
+                                "creator",
                                 (
-                                    "creator",
-                                    (
-                                        "origin_level",
-                                        "status",
-                                    ),
+                                    "origin_level",
+                                    "status",
                                 ),
                             ),
                         ),
@@ -60,7 +55,7 @@ PROPOSAL_TYPE = sp.TRecord(
                 ),
             ),
         ),
-    )
+    ),
 )
 
 #########
