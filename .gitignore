@@ -1,1 +1,2 @@
-/test_outputs
+test_outputs/
+node_modules/

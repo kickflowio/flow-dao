@@ -20,10 +20,10 @@ TOKEN_METADATA = {
     "decimals": "18",
     "name": "Kickflow Governance Token",
     "symbol": "KFL",
-    "icon": "https://avatars.githubusercontent.com/u/77055111?s=200&v=4",
+    "icon": "ipfs://QmT6bXCH3C7sHp8gRJ7v87nRhqUTG2u9bfLEFLJ3hJEzCA",
 }
 CONTRACT_METADATA = {
-    "": "ipfs://QmNaR3WbYeddJvsU5E1BiooEy24ejSMTAFUkppDsyu8rxV",
+    "": "ipfs://QmTh5HdjgfsRw5zsfQ6H7vajVo9cVpnbXuxrtvyvTQhJTP",
 }
 
 # A collection of error messages used in the contract.
@@ -50,14 +50,10 @@ class FA12_config:
     def __init__(
         self,
         support_upgradable_metadata=True,
-        use_token_metadata_offchain_view=True,
     ):
         # Whether the contract metadata can be upgradable or not.
-        # When True a new entrypoint `change_metadata` will be added.
+        # When True a new entrypoint `update_metadata` will be added.
         self.support_upgradable_metadata = support_upgradable_metadata
-
-        # Include offchain view for accessing the token metadata (requires TZIP-016 contract metadata)
-        self.use_token_metadata_offchain_view = use_token_metadata_offchain_view
 
 
 class FA12_common:
@@ -93,7 +89,7 @@ class FA12_core(sp.Contract, FA12_common):
             numSnapshots=sp.big_map(tkey=sp.TAddress, tvalue=sp.TNat),
             # CHANGED: added minting_disbaled
             mintingDisabled=False,
-            **extra_storage
+            **extra_storage,
         )
 
     @sp.entry_point
@@ -1011,7 +1007,7 @@ if __name__ == "__main__":
         scenario.h1("Attempt to update metadata")
         scenario.verify(
             c1.data.metadata[""]
-            == sp.utils.bytes_of_string("ipfs://QmNaR3WbYeddJvsU5E1BiooEy24ejSMTAFUkppDsyu8rxV")
+            == sp.utils.bytes_of_string("ipfs://QmTh5HdjgfsRw5zsfQ6H7vajVo9cVpnbXuxrtvyvTQhJTP")
         )
         c1.update_metadata(key="", value=sp.bytes("0x00")).run(sender=admin)
         scenario.verify(c1.data.metadata[""] == sp.bytes("0x00"))
