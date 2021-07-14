@@ -275,7 +275,7 @@ class FlowDAO(sp.Contract):
         # Check balance snapshot of previous level to avoid flash loan usage
         sp.transfer(
             (
-                sp.record(address=sp.sender, level=proposal.origin_level),
+                sp.record(address=sp.sender, level=sp.as_nat(proposal.origin_level - 1)),
                 sp.self_entry_point("vote_callback"),
             ),
             sp.mutez(0),
