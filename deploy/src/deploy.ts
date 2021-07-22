@@ -49,6 +49,23 @@ export const deploy = async (deployParams: DeployParams): Promise<void> => {
     const daoAddress = await deployContract(daoCode, daoStorage, deployParams.Tezos);
 
     console.log(`DAO Deployed at: ${daoAddress}\n\n`);
+
+    // Load Community Fund code
+    const communityFundCode = loadContract(`${__dirname}/../../michelson/community_fund.tz`);
+
+    // Prepare Community Fund storage
+    const communityFundStorage = `"${daoAddress}"`;
+
+    console.log(">>Deploying Community Fund Contract\n\n");
+
+    // Deploy  DAO
+    const communityFundAddress = await deployContract(
+      communityFundCode,
+      communityFundStorage,
+      deployParams.Tezos
+    );
+
+    console.log(`Community Fund Deployed at: ${communityFundAddress}\n\n`);
   } catch (err) {
     console.log(err);
   }

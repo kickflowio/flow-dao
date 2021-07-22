@@ -20,7 +20,6 @@ export const deployContract = async (
     });
 
     await originOp.confirmation(1);
-    console.log(originOp.status);
     return originOp.contractAddress as string;
   } catch (err) {
     console.log(util.inspect(err.errors, false, null, true));

@@ -16,7 +16,7 @@ OUT_DIR=./test_outputs
 COMP_DIR=./michelson
 
 # Array of files to compile.
-CONTRACTS_ARRAY=(fa12_token flow_dao)
+CONTRACTS_ARRAY=(fa12_token flow_dao community_fund)
 
 # Ensure we have a SmartPy binary.
 if [ ! -f "$SMART_PY_CLI" ]; then

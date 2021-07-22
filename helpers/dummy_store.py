@@ -15,3 +15,7 @@ class DummyStore(sp.Contract):
         sp.set_type(param, sp.TNat)
         sp.verify(sp.sender == self.data.admin, "NOT ALLOWED")
         self.data.value = param
+
+    @sp.entry_point
+    def default(self):
+        pass

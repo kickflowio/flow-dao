@@ -3,7 +3,7 @@ import { InMemorySigner } from "@taquito/signer";
 import { DeployParams, deploy } from "./deploy";
 import BigNumber from "bignumber.js";
 
-const Tezos = new TezosToolkit("https://testnet-tezos.giganode.io");
+const Tezos = new TezosToolkit("https://florencenet.smartpy.io");
 
 Tezos.setProvider({
   signer: new InMemorySigner(process.env.PRIVATE_KEY as string),
