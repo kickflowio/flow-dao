@@ -17,6 +17,8 @@ FlowDAO is written in SmartPy. To know more, view SmartPy's [documentation](http
 - `flow_dao.py` : The DAO contract.
 - `community_fund.py` : A community fund managed by the DAO, with the ability to transfer tez, FA1.2 & FA2.
 
+View the smart contract [docs](https://github.com/kickflowio/flow-dao/tree/master/docs) for more context.
+
 ### Folders
 
 - `deploy` : Scripts assisting deployment of the contracts.

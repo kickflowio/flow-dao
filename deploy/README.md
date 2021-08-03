@@ -1,6 +1,6 @@
 # Deploy
 
-The scripts provided in this folder assist the deployment of FlowDAO contracts. We have used [Taquito](https://tezostaquito.io/docs/michelson_encoder/) library to simplify the process.
+The scripts provided in this folder assist the deployment of FlowDAO contracts. We have used [Taquito](https://tezostaquito.io/) library to simplify the process.
 
 ## Installing Dependencies
 
