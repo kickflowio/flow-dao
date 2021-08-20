@@ -88,11 +88,7 @@ class FlowDAO(sp.Contract):
 
         # TZIP16 based metadata
         metadata = sp.big_map(
-            l={
-                "": sp.utils.bytes_of_string(
-                    "ipfs://QmWsnPbQfpKusSoPm6wpbBnAKarPhsG6uWiueaGgUdKhMZ"
-                )
-            },
+            l={"": sp.utils.bytes_of_string("ipfs://QmWsnPbQfpKusSoPm6wpbBnAKarPhsG6uWiueaGgUdKhMZ")},
             tkey=sp.TString,
             tvalue=sp.TBytes,
         )
@@ -130,9 +126,9 @@ class FlowDAO(sp.Contract):
     def register_proposal(self, params):
         sp.set_type(
             params,
-            sp.TRecord(
-                proposal_metadata=sp.TString, proposal_lambda=Proposal.PROPOSAL_LAMBDA
-            ).layout(("proposal_metadata", "proposal_lambda")),
+            sp.TRecord(proposal_metadata=sp.TString, proposal_lambda=Proposal.PROPOSAL_LAMBDA).layout(
+                ("proposal_metadata", "proposal_lambda")
+            ),
         )
 
         # Update proposal buffer
@@ -225,9 +221,7 @@ class FlowDAO(sp.Contract):
         sp.if majority_vote & quorum_attained:
             # Activate proposal timelock
             proposal.proposal_timelock.activated = True
-            proposal.proposal_timelock.ending = sp.now.add_seconds(
-                self.data.governance_parameters.timelock_period
-            )
+            proposal.proposal_timelock.ending = sp.now.add_seconds(self.data.governance_parameters.timelock_period)
 
             # Change proposal status to timelocked
             proposal.status = Proposal.PROPOSAL_STATUS_TIMELOCKED
@@ -239,9 +233,7 @@ class FlowDAO(sp.Contract):
     def vote(self, params):
         sp.set_type(
             params,
-            sp.TRecord(proposal_id=sp.TNat, vote_value=sp.TNat).layout(
-                ("proposal_id", "vote_value")
-            ),
+            sp.TRecord(proposal_id=sp.TNat, vote_value=sp.TNat).layout(("proposal_id", "vote_value")),
         )
         sp.verify(self.data.proposals.contains(params.proposal_id), Errors.INVALID_PROPOSAL_ID)
 
@@ -254,9 +246,7 @@ class FlowDAO(sp.Contract):
 
         # Put params in voting buffer
         self.data.voting_buffer = sp.some(
-            sp.record(
-                proposal_id=params.proposal_id, vote_value=params.vote_value, sender=sp.sender
-            )
+            sp.record(proposal_id=params.proposal_id, vote_value=params.vote_value, sender=sp.sender)
         )
 
         # Update the state machine
@@ -316,12 +306,11 @@ class FlowDAO(sp.Contract):
         self.data.state = STATE_IDLE
         self.data.voting_buffer = sp.none
 
-    # Executes the proposal_lambda of a proposal with timelock activated
     @sp.entry_point
     def execute_proposal(self, proposal_id):
         sp.set_type(proposal_id, sp.TNat)
 
-        # Verify if proposal exists
+        # Verify that the proposal exists
         sp.verify(self.data.proposals.contains(proposal_id), Errors.INVALID_PROPOSAL_ID)
 
         proposal = self.data.proposals[proposal_id]
@@ -381,7 +370,8 @@ if __name__ == "__main__":
 
         # Mint token for ALICE
         scenario += token.mint(address=Addresses.ALICE, value=50_000 * DECIMALS).run(
-            sender=Addresses.ADMIN, level=1
+            sender=Addresses.ADMIN,
+            level=1,
         )
 
         # The lambda for the proposal
@@ -393,16 +383,16 @@ if __name__ == "__main__":
         proposal_metadata = "ipfs://xyz"
 
         # ALICE registers a proposal at level 2
-        scenario += dao.register_proposal(
-            proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda
-        ).run(sender=Addresses.ALICE, level=2, now=sp.timestamp(0))
+        scenario += dao.register_proposal(proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda).run(
+            sender=Addresses.ALICE, level=2, now=sp.timestamp(0)
+        )
 
-        # Verify if a proposal got registered
+        # Verify that a proposal got registered
         scenario.verify(dao.data.uuid == 1)
 
         proposal = dao.data.proposals[1]
 
-        # Verify if the proposal has correct fields
+        # Verify proposal fields
         scenario.verify(proposal.up_votes == 0)
         scenario.verify(proposal.down_votes == 0)
         scenario.verify(proposal.proposal_metadata == proposal_metadata)
@@ -410,9 +400,7 @@ if __name__ == "__main__":
         scenario.verify(proposal.origin_level == 2)
         scenario.verify(proposal.status == Proposal.PROPOSAL_STATUS_VOTING)
         scenario.verify(proposal.voting_end == sp.timestamp(DAY * 2))
-        scenario.verify(
-            proposal.proposal_timelock == sp.record(ending=sp.timestamp(0), activated=False)
-        )
+        scenario.verify(proposal.proposal_timelock == sp.record(ending=sp.timestamp(0), activated=False))
 
         # Confirm that state is reset
         scenario.verify(dao.data.state == STATE_IDLE)
@@ -433,7 +421,8 @@ if __name__ == "__main__":
 
         # Mint tokens for ALICE (1 less than proposal threshold)
         scenario += token.mint(address=Addresses.ALICE, value=49_999 * DECIMALS).run(
-            sender=Addresses.ADMIN, level=1
+            sender=Addresses.ADMIN,
+            level=1,
         )
 
         # The lambda for the proposal
@@ -445,9 +434,7 @@ if __name__ == "__main__":
         proposal_metadata = "ipfs://xyz"
 
         # ALICE registers a proposal at level 2
-        scenario += dao.register_proposal(
-            proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda
-        ).run(
+        scenario += dao.register_proposal(proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda).run(
             sender=Addresses.ALICE,
             level=2,
             now=sp.timestamp(0),
@@ -471,7 +458,8 @@ if __name__ == "__main__":
 
         # Mint tokens for ALICE (1 less than proposal threshold)
         scenario += token.mint(address=Addresses.ALICE, value=50_000 * DECIMALS).run(
-            sender=Addresses.ADMIN, level=1
+            sender=Addresses.ADMIN,
+            level=1,
         )
 
         # The lambda for the proposal
@@ -483,9 +471,7 @@ if __name__ == "__main__":
         proposal_metadata = "ipfs://xyz"
 
         # ALICE registers a proposal at the same level (Like in a flash loan attack)
-        scenario += dao.register_proposal(
-            proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda
-        ).run(
+        scenario += dao.register_proposal(proposal_metadata=proposal_metadata, proposal_lambda=proposal_lambda).run(
             sender=Addresses.ALICE,
             level=1,
             now=sp.timestamp(0),
@@ -541,7 +527,7 @@ if __name__ == "__main__":
         # Fetch proposal timelock
         timelock = dao.data.proposals[1].proposal_timelock
 
-        # Verify if timelock was activate
+        # Verify that timelock was activate
         scenario.verify(timelock.activated)
         scenario.verify(timelock.ending == sp.timestamp(1 * DAY + 1))
         scenario.verify(dao.data.proposals[1].status == Proposal.PROPOSAL_STATUS_TIMELOCKED)
@@ -586,11 +572,11 @@ if __name__ == "__main__":
 
         DEFAULT_TIMELOCK = sp.record(ending=sp.timestamp(0), activated=False)
 
-        # Verify  if fields are correctly set for proposal 1
+        # Verify fields for proposal 1
         scenario.verify(dao.data.proposals[1].status == Proposal.PROPOSAL_STATUS_REJECTED)
         scenario.verify(dao.data.proposals[1].proposal_timelock == DEFAULT_TIMELOCK)
 
-        # Verify  if fields are correctly set for proposal 2
+        # Verify fields for proposal 2
         scenario.verify(dao.data.proposals[2].status == Proposal.PROPOSAL_STATUS_REJECTED)
         scenario.verify(dao.data.proposals[2].proposal_timelock == DEFAULT_TIMELOCK)
 
@@ -616,7 +602,9 @@ if __name__ == "__main__":
 
         # End the vote by supplying invalid id
         scenario += dao.end_voting(2).run(
-            now=sp.timestamp(1), valid=False, exception=Errors.INVALID_PROPOSAL_ID
+            now=sp.timestamp(1),
+            valid=False,
+            exception=Errors.INVALID_PROPOSAL_ID,
         )
 
     @sp.add_test(name="end_voting fails if proposal is still under vote")
@@ -641,7 +629,9 @@ if __name__ == "__main__":
 
         # End the vote 1 second before ending of voting
         scenario += dao.end_voting(1).run(
-            now=sp.timestamp(1), valid=False, exception=Errors.VOTING_ONGOING
+            now=sp.timestamp(1),
+            valid=False,
+            exception=Errors.VOTING_ONGOING,
         )
 
     @sp.add_test(name="end_voting fails if proposal has already ended")
@@ -666,7 +656,9 @@ if __name__ == "__main__":
 
         # End the vote 1 second before ending of voting
         scenario += dao.end_voting(1).run(
-            now=sp.timestamp(1), valid=False, exception=Errors.VOTING_ALREADY_ENDED
+            now=sp.timestamp(1),
+            valid=False,
+            exception=Errors.VOTING_ALREADY_ENDED,
         )
 
     #######
@@ -775,9 +767,7 @@ if __name__ == "__main__":
 
         dao = FlowDAO(
             proposals=sp.big_map(l={1: proposal}),
-            voters=sp.big_map(
-                l={(Addresses.ALICE, 1): sp.record(votes=100, value=Proposal.VOTE_VALUE_UPVOTE)}
-            ),
+            voters=sp.big_map(l={(Addresses.ALICE, 1): sp.record(votes=100, value=Proposal.VOTE_VALUE_UPVOTE)}),
         )
 
         scenario += dao
@@ -941,9 +931,7 @@ if __name__ == "__main__":
         scenario += dummy_store
 
         # Execute the timelocked proposal 1 second before timelock ending
-        scenario += dao.execute_proposal(1).run(
-            now=sp.timestamp(1), valid=False, exception=Errors.EXECUTING_TOO_SOON
-        )
+        scenario += dao.execute_proposal(1).run(now=sp.timestamp(1), valid=False, exception=Errors.EXECUTING_TOO_SOON)
 
     @sp.add_test(name="execute_proposal fails if non timelocked proposal is executed")
     def test():
@@ -974,9 +962,7 @@ if __name__ == "__main__":
         scenario += dummy_store
 
         # Execute the timelocked proposal 1 second before timelock ending
-        scenario += dao.execute_proposal(1).run(
-            now=sp.timestamp(1), valid=False, exception=Errors.TIMELOCK_INACTIVE
-        )
+        scenario += dao.execute_proposal(1).run(now=sp.timestamp(1), valid=False, exception=Errors.TIMELOCK_INACTIVE)
 
     ############################
     # set_governance_parameters

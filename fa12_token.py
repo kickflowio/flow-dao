@@ -37,23 +37,13 @@ class FA12_Error:
     Paused = make("Paused")
     NotAllowed = make("NotAllowed")
 
-    # CHANGED: added errors
+    # CHANGED: added new errors
     MintingDisabled = make("MintingDisabled")
     BlockNotFinalized = make("BlockNotFinalized")
     SelfTransferNotAllowed = make("SelfTransferNotAllowed")
 
 
-## ## Meta-Programming Configuration
-##
-## The `FA12_config` class holds the meta-programming configuration.
-class FA12_config:
-    def __init__(
-        self,
-        support_upgradable_metadata=True,
-    ):
-        # Whether the contract metadata can be upgradable or not.
-        # When True a new entrypoint `update_metadata` will be added.
-        self.support_upgradable_metadata = support_upgradable_metadata
+# CHANGED: Removed FA12_config class
 
 
 class FA12_common:
@@ -68,17 +58,15 @@ class FA12_common:
         return meta
 
 
-# CHANGE: All sp.if, sp.else, sp.while replaced with desugared version for linting
+# CHANGE: All sp.if, sp.else, sp.while are replaced with desugared version for auto-formatting
 
 
 class FA12_core(sp.Contract, FA12_common):
-    def __init__(self, config, **extra_storage):
-        self.config = config
-
+    # CHANGED: removed config
+    def __init__(self, **extra_storage):
+        # CHANGED: removed config
         self.init(
-            balances=sp.big_map(
-                tvalue=sp.TRecord(approvals=sp.TMap(sp.TAddress, sp.TNat), balance=sp.TNat)
-            ),
+            balances=sp.big_map(tvalue=sp.TRecord(approvals=sp.TMap(sp.TAddress, sp.TNat), balance=sp.TNat)),
             totalSupply=0,
             # CHANGED: added snapshots BIGMAP
             snapshots=sp.big_map(
@@ -87,9 +75,9 @@ class FA12_core(sp.Contract, FA12_common):
             ),
             # CHANGED: added numSnapshots BIGMAP
             numSnapshots=sp.big_map(tkey=sp.TAddress, tvalue=sp.TNat),
-            # CHANGED: added minting_disbaled
+            # CHANGED: added mintingDisbaled
             mintingDisabled=False,
-            **extra_storage,
+            **extra_storage
         )
 
     @sp.entry_point
@@ -101,28 +89,23 @@ class FA12_core(sp.Contract, FA12_common):
             ),
         )
         sp.verify(
-            (params.from_ == sp.sender)
-            | (self.data.balances[params.from_].approvals[sp.sender] >= params.value),
+            (params.from_ == sp.sender) | (self.data.balances[params.from_].approvals[sp.sender] >= params.value),
             FA12_Error.NotAllowed,
         )
 
-        # CHANGED: prohibit self transfers to prevent redundant checkpoint
+        # CHANGED: prohibit self transfers to prevent redundant checkpoints
         sp.verify(params.from_ != params.to_, FA12_Error.SelfTransferNotAllowed)
 
         self.addAddressIfNecessary(params.from_)
         self.addAddressIfNecessary(params.to_)
-        sp.verify(
-            self.data.balances[params.from_].balance >= params.value, FA12_Error.InsufficientBalance
-        )
-        self.data.balances[params.from_].balance = sp.as_nat(
-            self.data.balances[params.from_].balance - params.value
-        )
+        sp.verify(self.data.balances[params.from_].balance >= params.value, FA12_Error.InsufficientBalance)
+        self.data.balances[params.from_].balance = sp.as_nat(self.data.balances[params.from_].balance - params.value)
         self.data.balances[params.to_].balance += params.value
 
-        # CHANGE: take from_ address snapshot
+        # CHANGE: take snapshot for from_ address
         self.takeSnapshot(params.from_)
 
-        # CHANGE: take to_ address snapshot
+        # CHANGE: take snapshot for to_ address
         self.takeSnapshot(params.to_)
 
         with sp.if_(params.from_ != sp.sender):
@@ -132,9 +115,7 @@ class FA12_core(sp.Contract, FA12_common):
 
     @sp.entry_point
     def approve(self, params):
-        sp.set_type(
-            params, sp.TRecord(spender=sp.TAddress, value=sp.TNat).layout(("spender", "value"))
-        )
+        sp.set_type(params, sp.TRecord(spender=sp.TAddress, value=sp.TNat).layout(("spender", "value")))
         self.addAddressIfNecessary(sp.sender)
         alreadyApproved = self.data.balances[sp.sender].approvals.get(params.spender, 0)
         sp.verify((alreadyApproved == 0) | (params.value == 0), FA12_Error.UnsafeAllowanceChange)
@@ -165,58 +146,49 @@ class FA12_core(sp.Contract, FA12_common):
         sp.set_type(params, sp.TUnit)
         sp.result(self.data.totalSupply)
 
-    # CHANGED: removed is_paused & is_administrator function
+    # CHANGED: removed redundant is_paused & is_administrator function
 
 
 # CHANGED: Add FA12_snapshot class
 class FA12_snapshot(FA12_core):
-    # Takes the snapshot of the balance of an address at the current level
+    # Takes the balance snapshot of an address at the current block level
     @sp.sub_entry_point
     def takeSnapshot(self, address):
         sp.set_type(address, sp.TAddress)
 
-        # Add a base level balance snapshot if not already present
+        # Add a base level balance snapshot, if not already present
         with sp.if_(~self.data.numSnapshots.contains(address)):
             self.data.numSnapshots[address] = 1
             self.data.snapshots[(address, 0)] = sp.record(level=0, balance=0)
 
-        # If the a snapshot is already taken at the same level, simply overwrite it
-        with sp.if_(
-            self.data.snapshots[(address, sp.as_nat(self.data.numSnapshots[address] - 1))].level
-            == sp.level
-        ):
-            self.data.snapshots[
-                (address, sp.as_nat(self.data.numSnapshots[address] - 1))
-            ].balance = self.data.balances[address].balance
+        # If a snapshot is already taken at the same level, simply overwrite it
+        with sp.if_(self.data.snapshots[(address, sp.as_nat(self.data.numSnapshots[address] - 1))].level == sp.level):
+            self.data.snapshots[(address, sp.as_nat(self.data.numSnapshots[address] - 1))].balance = self.data.balances[
+                address
+            ].balance
         with sp.else_():
             self.data.snapshots[(address, self.data.numSnapshots[address])] = sp.record(
                 level=sp.level, balance=self.data.balances[address].balance
             )
             self.data.numSnapshots[address] += 1
 
-    # Allows viewing of an address's balance at a certain level
+    # Allows retrieval of an address's balance at a certain block level
     @sp.utils.view(sp.TNat)
     def getBalanceAt(self, params):
-        sp.set_type(
-            params, sp.TRecord(address=sp.TAddress, level=sp.TNat).layout(("address", "level"))
-        )
+        sp.set_type(params, sp.TRecord(address=sp.TAddress, level=sp.TNat).layout(("address", "level")))
 
         sp.verify(params.level < sp.level, FA12_Error.BlockNotFinalized)
 
         with sp.if_(~self.data.numSnapshots.contains(params.address)):
             sp.result(sp.nat(0))
         with sp.else_():
-            # If requested level is greater than last level snapshot, return that
+            # If requested level is greater than last snapshot's level, return the last balance snapshot
             with sp.if_(
                 params.level
-                >= self.data.snapshots[
-                    (params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))
-                ].level
+                >= self.data.snapshots[(params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))].level
             ):
                 sp.result(
-                    self.data.snapshots[
-                        (params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))
-                    ].balance
+                    self.data.snapshots[(params.address, sp.as_nat(self.data.numSnapshots[params.address] - 1))].balance
                 )
             with sp.else_():
                 # Binary search the appropriate snapshot
@@ -225,17 +197,12 @@ class FA12_snapshot(FA12_core):
                 mid = sp.local("mid", sp.nat(0))
 
                 with sp.while_(
-                    (low.value < high.value)
-                    & (self.data.snapshots[(params.address, mid.value)].level != params.level)
+                    (low.value < high.value) & (self.data.snapshots[(params.address, mid.value)].level != params.level)
                 ):
                     mid.value = (low.value + high.value + 1) // 2
-                    with sp.if_(
-                        self.data.snapshots[(params.address, mid.value)].level > params.level
-                    ):
+                    with sp.if_(self.data.snapshots[(params.address, mid.value)].level > params.level):
                         high.value = sp.as_nat(mid.value - 1)
-                    with sp.if_(
-                        self.data.snapshots[(params.address, mid.value)].level < params.level
-                    ):
+                    with sp.if_(self.data.snapshots[(params.address, mid.value)].level < params.level):
                         low.value = mid.value
                 with sp.if_(self.data.snapshots[(params.address, mid.value)].level == params.level):
                     sp.result(self.data.snapshots[(params.address, mid.value)].balance)
@@ -253,7 +220,7 @@ class FA12_mint(FA12_core):
         self.data.balances[params.address].balance += params.value
         self.data.totalSupply += params.value
 
-        # CHANGED: take snapshot of address balance
+        # CHANGED: take snapshot of the address's balance
         self.takeSnapshot(params.address)
 
     # CHANGED: added disable_mint entrypoint
@@ -269,16 +236,9 @@ class FA12_administrator(FA12_core):
     def is_administrator(self, sender):
         return sender == self.data.administrator
 
-    @sp.entry_point
-    def setAdministrator(self, params):
-        sp.set_type(params, sp.TAddress)
-        sp.verify(self.is_administrator(sp.sender), FA12_Error.NotAdmin)
-        self.data.administrator = params
+    # CHANGED: removed setAdministrator entrypoint
 
-    @sp.utils.view(sp.TAddress)
-    def getAdministrator(self, params):
-        sp.set_type(params, sp.TUnit)
-        sp.result(self.data.administrator)
+    # CHANGED: removed getAdministrator view
 
 
 # CHANGED: Removed FA12_Pause class
@@ -308,18 +268,7 @@ class FA12_contract_metadata(FA12_core):
         """
         self.update_initial_storage(metadata=sp.big_map(self.normalize_metadata(metadata)))
 
-        if self.config.support_upgradable_metadata:
-
-            def update_metadata(self, key, value):
-                """
-                An entry-point to allow the contract metadata to be updated.
-
-                Can be removed with `FA12_config(support_upgradable_metadata = False, ...)`
-                """
-                sp.verify(self.is_administrator(sp.sender), FA12_Error.NotAdmin)
-                self.data.metadata[key] = value
-
-            self.update_metadata = sp.entry_point(update_metadata)
+        # CHANGED: removed entrypoint that supported upgradeable metadata
 
 
 class FA12(
@@ -334,12 +283,12 @@ class FA12(
         self,
         # CHANGED: added default values
         admin=Addresses.ADMIN,
-        config=FA12_config(),
+        # CHANGED: removed config
         token_metadata=TOKEN_METADATA,
         contract_metadata=CONTRACT_METADATA,
     ):
-        # CHANGED: removed paused
-        FA12_core.__init__(self, config, administrator=admin)
+        # CHANGED: removed paused and config
+        FA12_core.__init__(self, administrator=admin)
 
         # CHANGED: removed not-empty checks for token_metadata & contract_metadata
 
@@ -378,9 +327,7 @@ if __name__ == "__main__":
         scenario += token
         scenario += viewer
 
-        scenario += token.getBalanceAt(
-            (sp.record(level=5, address=Addresses.ALICE), viewer.typed.target)
-        ).run(level=10)
+        scenario += token.getBalanceAt((sp.record(level=5, address=Addresses.ALICE), viewer.typed.target)).run(level=10)
 
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
@@ -418,15 +365,9 @@ if __name__ == "__main__":
         currentLevel = 10
 
         # Mint tokens for ALICE at mintLevels
-        scenario += token.mint(address=Addresses.ALICE, value=10).run(
-            sender=Addresses.ADMIN, level=mintLevel1
-        )
-        scenario += token.mint(address=Addresses.ALICE, value=10).run(
-            sender=Addresses.ADMIN, level=mintLevel2
-        )
-        scenario += token.mint(address=Addresses.ALICE, value=10).run(
-            sender=Addresses.ADMIN, level=mintLevel3
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(sender=Addresses.ADMIN, level=mintLevel1)
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(sender=Addresses.ADMIN, level=mintLevel2)
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(sender=Addresses.ADMIN, level=mintLevel3)
 
         scenario += token.getBalanceAt(
             (sp.record(level=requestLevel, address=Addresses.ALICE), viewer.typed.target)
@@ -449,9 +390,7 @@ if __name__ == "__main__":
         currentLevel = 6
 
         # Mint tokens for ALICE at mintLevel
-        scenario += token.mint(address=Addresses.ALICE, value=10).run(
-            sender=Addresses.ADMIN, level=mintLevel
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=10).run(sender=Addresses.ADMIN, level=mintLevel)
 
         scenario += token.getBalanceAt(
             (sp.record(level=requestLevel, address=Addresses.ALICE), viewer.typed.target)
@@ -471,9 +410,7 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
         # Alice transfers 10 tokens to BOB at 5 levels
         #
@@ -511,69 +448,69 @@ if __name__ == "__main__":
         currentLevel = 12
 
         # Level 1
-        scenario += token.getBalanceAt(
-            (sp.record(level=1, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=1, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
         # Level 2
-        scenario += token.getBalanceAt(
-            (sp.record(level=2, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=2, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 3
-        scenario += token.getBalanceAt(
-            (sp.record(level=3, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=3, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 4
-        scenario += token.getBalanceAt(
-            (sp.record(level=4, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=4, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 5
-        scenario += token.getBalanceAt(
-            (sp.record(level=5, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=5, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 6
-        scenario += token.getBalanceAt(
-            (sp.record(level=6, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=6, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 7
-        scenario += token.getBalanceAt(
-            (sp.record(level=7, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=7, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 8
-        scenario += token.getBalanceAt(
-            (sp.record(level=8, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=8, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 9
-        scenario += token.getBalanceAt(
-            (sp.record(level=9, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=9, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 10
-        scenario += token.getBalanceAt(
-            (sp.record(level=10, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=10, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(50))
 
         # Level 11
-        scenario += token.getBalanceAt(
-            (sp.record(level=11, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=11, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(50))
 
     # Odd number of snapshots: BASE SNAPSHOT + 4 TRANSFER SNAPSHOTS
@@ -588,9 +525,7 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
         # Alice transfers 10 tokens to BOB at 4 levels
         #
@@ -623,57 +558,57 @@ if __name__ == "__main__":
         currentLevel = 12
 
         # Level 1
-        scenario += token.getBalanceAt(
-            (sp.record(level=1, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=1, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(0))
 
         # Level 2
-        scenario += token.getBalanceAt(
-            (sp.record(level=2, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=2, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 3
-        scenario += token.getBalanceAt(
-            (sp.record(level=3, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=3, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(10))
 
         # Level 4
-        scenario += token.getBalanceAt(
-            (sp.record(level=4, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=4, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 5
-        scenario += token.getBalanceAt(
-            (sp.record(level=5, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=5, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(20))
 
         # Level 6
-        scenario += token.getBalanceAt(
-            (sp.record(level=6, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=6, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 7
-        scenario += token.getBalanceAt(
-            (sp.record(level=7, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=7, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(30))
 
         # Level 8
-        scenario += token.getBalanceAt(
-            (sp.record(level=8, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=8, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
         # Level 9
-        scenario += token.getBalanceAt(
-            (sp.record(level=9, address=Addresses.BOB), viewer.typed.target)
-        ).run(level=currentLevel)
+        scenario += token.getBalanceAt((sp.record(level=9, address=Addresses.BOB), viewer.typed.target)).run(
+            level=currentLevel
+        )
         scenario.verify(viewer.data.last.open_some() == sp.nat(40))
 
     ##############################
@@ -691,9 +626,7 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
         # ALICE transfers to BOB
         scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=10).run(
@@ -715,9 +648,7 @@ if __name__ == "__main__":
         scenario.verify(token.data.numSnapshots[Addresses.JOHN] == 2)  # Base + transfer
 
         # BOB transfers to JOHN
-        scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(
-            sender=Addresses.BOB, level=4
-        )
+        scenario += token.transfer(from_=Addresses.BOB, to_=Addresses.JOHN, value=10).run(sender=Addresses.BOB, level=4)
 
         scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + mint + 2 transfers
         scenario.verify(token.data.numSnapshots[Addresses.BOB] == 3)  # Base + 2 transfers
@@ -767,9 +698,7 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
         # Alice approves BOB
         scenario += token.approve(spender=Addresses.BOB, value=100).run(sender=Addresses.ALICE)
@@ -849,9 +778,7 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
         # ALICE transfers to BOB twice and same level
         scenario += token.transfer(from_=Addresses.ALICE, to_=Addresses.BOB, value=20).run(
@@ -910,17 +837,11 @@ if __name__ == "__main__":
         scenario += viewer
 
         # Mint tokens for ALICE
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=1
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=1)
 
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=3
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=3)
 
-        scenario += token.mint(address=Addresses.ALICE, value=100).run(
-            sender=Addresses.ADMIN, level=5
-        )
+        scenario += token.mint(address=Addresses.ALICE, value=100).run(sender=Addresses.ADMIN, level=5)
 
         # Verify number of snapshots
         scenario.verify(token.data.numSnapshots[Addresses.ALICE] == 4)  # Base + 3 mints
@@ -975,9 +896,7 @@ if __name__ == "__main__":
         )
 
         # BOB tries to disable minting
-        scenario += token.disableMint().run(
-            sender=Addresses.BOB, valid=False, exception=FA12_Error.NotAdmin
-        )
+        scenario += token.disableMint().run(sender=Addresses.BOB, valid=False, exception=FA12_Error.NotAdmin)
 
     # Original SmartPy test suite
     @sp.add_test(name="Smartpy tests")
@@ -1004,13 +923,7 @@ if __name__ == "__main__":
 
         # CHANGED: removed metadata viewing test
 
-        scenario.h1("Attempt to update metadata")
-        scenario.verify(
-            c1.data.metadata[""]
-            == sp.utils.bytes_of_string("ipfs://QmTh5HdjgfsRw5zsfQ6H7vajVo9cVpnbXuxrtvyvTQhJTP")
-        )
-        c1.update_metadata(key="", value=sp.bytes("0x00")).run(sender=admin)
-        scenario.verify(c1.data.metadata[""] == sp.bytes("0x00"))
+        # CHANGED: Removed metadataa updation test
 
         scenario.h1("Entry points")
         scenario.h2("Admin mints a few coins")
@@ -1042,11 +955,7 @@ if __name__ == "__main__":
         c1.getBalance((alice.address, view_balance.typed.target))
         scenario.verify_equal(view_balance.data.last, sp.some(10))
 
-        scenario.h2("Administrator")
-        view_administrator = Viewer(sp.TAddress)
-        scenario += view_administrator
-        c1.getAdministrator((sp.unit, view_administrator.typed.target))
-        scenario.verify_equal(view_administrator.data.last, sp.some(admin.address))
+        # CHANGED: Removed getAdministrator view test
 
         scenario.h2("Total Supply")
         view_totalSupply = Viewer(sp.TNat)
@@ -1057,9 +966,7 @@ if __name__ == "__main__":
         scenario.h2("Allowance")
         view_allowance = Viewer(sp.TNat)
         scenario += view_allowance
-        c1.getAllowance(
-            (sp.record(owner=alice.address, spender=bob.address), view_allowance.typed.target)
-        )
+        c1.getAllowance((sp.record(owner=alice.address, spender=bob.address), view_allowance.typed.target))
         scenario.verify_equal(view_allowance.data.last, sp.some(1))
 
     sp.add_compilation_target("fa12_token", FA12())

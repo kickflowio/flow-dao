@@ -1,163 +1,143 @@
-parameter (or (or (address %set_admin) (option %set_delegate key_hash)) (or (pair %transfer_fa12 (address %token_address) (pair (nat %value) (address %dest))) (or (pair %transfer_fa2 (address %token_address) (list %txs (pair (address %to_) (pair (nat %token_id) (nat %amount))))) (pair %transfer_tez (mutez %value) (address %dest)))));
+parameter (or (or (option %set_delegate key_hash) (pair %transfer_fa12 (address %token_address) (pair (nat %value) (address %dest)))) (or (pair %transfer_fa2 (address %token_address) (list %txs (pair (address %to_) (pair (nat %token_id) (nat %amount))))) (pair %transfer_tez (mutez %value) (address %dest))));
 storage   address;
 code
   {
-    CAST (pair (or (or address (option key_hash)) (or (pair address (pair nat address)) (or (pair address (list (pair address (pair nat nat)))) (pair mutez address)))) address); # pair (or (or address (option key_hash)) (or (pair address (pair nat address)) (or (pair address (list (pair address (pair nat nat)))) (pair mutez address)))) address
-    UNPAIR;     # or (or address (option key_hash)) (or (pair address (pair nat address)) (or (pair address (list (pair address (pair nat nat)))) (pair mutez address))) : address
+    UNPAIR;     # @parameter : @storage
     IF_LEFT
       {
         IF_LEFT
           {
-            SWAP;       # address : address
-            # == set_admin ==
-            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # address : address
-            SENDER;     # @sender : address : address
-            COMPARE;    # int : address
-            EQ;         # bool : address
+            SWAP;       # @storage : @parameter%set_delegate
+            # == set_delegate ==
+            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # @storage : @parameter%set_delegate
+            DUP;        # @storage : @storage : @parameter%set_delegate
+            DUG 2;      # @storage : @parameter%set_delegate : @storage
+            SENDER;     # @sender : @storage : @parameter%set_delegate : @storage
+            COMPARE;    # int : @parameter%set_delegate : @storage
+            EQ;         # bool : @parameter%set_delegate : @storage
             IF
               {}
               {
-                PUSH string "NOT_ALLOWED"; # string : address
+                PUSH string "NOT_ALLOWED"; # string : @parameter%set_delegate : @storage
                 FAILWITH;   # FAILED
-              }; # address
-            # self.data.admin = params # address
-            NIL operation; # list operation : address
+              }; # @parameter%set_delegate : @storage
+            # sp.set_delegate(params) # @parameter%set_delegate : @storage
+            SET_DELEGATE; # operation : @storage
+            NIL operation; # list operation : operation : @storage
+            SWAP;       # operation : list operation : @storage
+            CONS;       # list operation : @storage
           }
           {
-            SWAP;       # address : option key_hash
-            # == set_delegate ==
-            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # address : option key_hash
-            DUP;        # address : address : option key_hash
-            DUG 2;      # address : option key_hash : address
-            SENDER;     # @sender : address : option key_hash : address
-            COMPARE;    # int : option key_hash : address
-            EQ;         # bool : option key_hash : address
+            SWAP;       # @storage : @parameter%transfer_fa12
+            # == transfer_fa12 ==
+            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # @storage : @parameter%transfer_fa12
+            DUP;        # @storage : @storage : @parameter%transfer_fa12
+            DUG 2;      # @storage : @parameter%transfer_fa12 : @storage
+            SENDER;     # @sender : @storage : @parameter%transfer_fa12 : @storage
+            COMPARE;    # int : @parameter%transfer_fa12 : @storage
+            EQ;         # bool : @parameter%transfer_fa12 : @storage
             IF
               {}
               {
-                PUSH string "NOT_ALLOWED"; # string : option key_hash : address
+                PUSH string "NOT_ALLOWED"; # string : @parameter%transfer_fa12 : @storage
                 FAILWITH;   # FAILED
-              }; # option key_hash : address
-            # sp.set_delegate(params) # option key_hash : address
-            SET_DELEGATE; # operation : address
-            NIL operation; # list operation : operation : address
-            SWAP;       # operation : list operation : address
-            CONS;       # list operation : address
-          }; # list operation : address
+              }; # @parameter%transfer_fa12 : @storage
+            # sp.transfer(sp.record(from_ = sp.self_address, to_ = params.dest, value = params.value), sp.tez(0), sp.contract(sp.TRecord(from_ = sp.TAddress, to_ = sp.TAddress, value = sp.TNat).layout(("from_ as from", ("to_ as to", "value"))), params.token_address, entry_point='transfer').open_some()) # @parameter%transfer_fa12 : @storage
+            DUP;        # @parameter%transfer_fa12 : @parameter%transfer_fa12 : @storage
+            CAR;        # address : @parameter%transfer_fa12 : @storage
+            CONTRACT %transfer (pair address (pair address nat)); # option (contract (pair address (pair address nat))) : @parameter%transfer_fa12 : @storage
+            IF_NONE
+              {
+                PUSH int 50; # int : @parameter%transfer_fa12 : @storage
+                FAILWITH;   # FAILED
+              }
+              {}; # @some : @parameter%transfer_fa12 : @storage
+            NIL operation; # list operation : @some : @parameter%transfer_fa12 : @storage
+            SWAP;       # @some : list operation : @parameter%transfer_fa12 : @storage
+            PUSH mutez 0; # mutez : @some : list operation : @parameter%transfer_fa12 : @storage
+            DIG 3;      # @parameter%transfer_fa12 : mutez : @some : list operation : @storage
+            DUP;        # @parameter%transfer_fa12 : @parameter%transfer_fa12 : mutez : @some : list operation : @storage
+            GET 3;      # nat : @parameter%transfer_fa12 : mutez : @some : list operation : @storage
+            SWAP;       # @parameter%transfer_fa12 : nat : mutez : @some : list operation : @storage
+            GET 4;      # address : nat : mutez : @some : list operation : @storage
+            SELF_ADDRESS; # @self : address : nat : mutez : @some : list operation : @storage
+            PAIR 3;     # pair @self (pair address nat) : mutez : @some : list operation : @storage
+            TRANSFER_TOKENS; # operation : list operation : @storage
+            CONS;       # list operation : @storage
+          }; # list operation : @storage
       }
       {
         IF_LEFT
           {
-            SWAP;       # address : pair address (pair nat address)
-            # == transfer_fa12 ==
-            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # address : pair address (pair nat address)
-            DUP;        # address : address : pair address (pair nat address)
-            DUG 2;      # address : pair address (pair nat address) : address
-            SENDER;     # @sender : address : pair address (pair nat address) : address
-            COMPARE;    # int : pair address (pair nat address) : address
-            EQ;         # bool : pair address (pair nat address) : address
+            SWAP;       # @storage : @parameter%transfer_fa2
+            # == transfer_fa2 ==
+            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # @storage : @parameter%transfer_fa2
+            DUP;        # @storage : @storage : @parameter%transfer_fa2
+            DUG 2;      # @storage : @parameter%transfer_fa2 : @storage
+            SENDER;     # @sender : @storage : @parameter%transfer_fa2 : @storage
+            COMPARE;    # int : @parameter%transfer_fa2 : @storage
+            EQ;         # bool : @parameter%transfer_fa2 : @storage
             IF
               {}
               {
-                PUSH string "NOT_ALLOWED"; # string : pair address (pair nat address) : address
+                PUSH string "NOT_ALLOWED"; # string : @parameter%transfer_fa2 : @storage
                 FAILWITH;   # FAILED
-              }; # pair address (pair nat address) : address
-            # sp.transfer(sp.record(from_ = sp.self_address, to_ = params.dest, value = params.value), sp.tez(0), sp.contract(sp.TRecord(from_ = sp.TAddress, to_ = sp.TAddress, value = sp.TNat).layout(("from_ as from", ("to_ as to", "value"))), params.token_address, entry_point='transfer').open_some()) # pair address (pair nat address) : address
-            DUP;        # pair address (pair nat address) : pair address (pair nat address) : address
-            CAR;        # address : pair address (pair nat address) : address
-            CONTRACT %transfer (pair address (pair address nat)); # option (contract (pair address (pair address nat))) : pair address (pair nat address) : address
-            IF_SOME
-              {}
+              }; # @parameter%transfer_fa2 : @storage
+            # sp.transfer(sp.list([sp.record(from_ = sp.self_address, txs = params.txs)]), sp.tez(0), sp.contract(sp.TList(sp.TRecord(from_ = sp.TAddress, txs = sp.TList(sp.TRecord(amount = sp.TNat, to_ = sp.TAddress, token_id = sp.TNat).layout(("to_", ("token_id", "amount"))))).layout(("from_", "txs"))), params.token_address, entry_point='transfer').open_some()) # @parameter%transfer_fa2 : @storage
+            DUP;        # @parameter%transfer_fa2 : @parameter%transfer_fa2 : @storage
+            CAR;        # address : @parameter%transfer_fa2 : @storage
+            CONTRACT %transfer (list (pair address (list (pair address (pair nat nat))))); # option (contract (list (pair address (list (pair address (pair nat nat)))))) : @parameter%transfer_fa2 : @storage
+            IF_NONE
               {
-                PUSH int 51; # int : pair address (pair nat address) : address
+                PUSH int 74; # int : @parameter%transfer_fa2 : @storage
                 FAILWITH;   # FAILED
-              }; # @some : pair address (pair nat address) : address
-            NIL operation; # list operation : @some : pair address (pair nat address) : address
-            SWAP;       # @some : list operation : pair address (pair nat address) : address
-            PUSH mutez 0; # mutez : @some : list operation : pair address (pair nat address) : address
-            DIG 3;      # pair address (pair nat address) : mutez : @some : list operation : address
-            DUP;        # pair address (pair nat address) : pair address (pair nat address) : mutez : @some : list operation : address
-            GET 3;      # nat : pair address (pair nat address) : mutez : @some : list operation : address
-            SWAP;       # pair address (pair nat address) : nat : mutez : @some : list operation : address
-            GET 4;      # address : nat : mutez : @some : list operation : address
-            SELF_ADDRESS; # @self : address : nat : mutez : @some : list operation : address
-            PAIR 3;     # pair @self (pair address nat) : mutez : @some : list operation : address
-            TRANSFER_TOKENS; # operation : list operation : address
-            CONS;       # list operation : address
+              }
+              {}; # @some : @parameter%transfer_fa2 : @storage
+            NIL operation; # list operation : @some : @parameter%transfer_fa2 : @storage
+            SWAP;       # @some : list operation : @parameter%transfer_fa2 : @storage
+            PUSH mutez 0; # mutez : @some : list operation : @parameter%transfer_fa2 : @storage
+            NIL (pair address (list (pair address (pair nat nat)))); # list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @parameter%transfer_fa2 : @storage
+            DIG 4;      # @parameter%transfer_fa2 : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @storage
+            CDR;        # list (pair (address %to_) (pair (nat %token_id) (nat %amount))) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @storage
+            SELF_ADDRESS; # @self : list (pair (address %to_) (pair (nat %token_id) (nat %amount))) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @storage
+            PAIR;       # pair @self (list (pair (address %to_) (pair (nat %token_id) (nat %amount)))) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @storage
+            CONS;       # list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : @storage
+            TRANSFER_TOKENS; # operation : list operation : @storage
+            CONS;       # list operation : @storage
           }
           {
-            IF_LEFT
+            SWAP;       # @storage : @parameter%transfer_tez
+            # == transfer_tez ==
+            # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # @storage : @parameter%transfer_tez
+            DUP;        # @storage : @storage : @parameter%transfer_tez
+            DUG 2;      # @storage : @parameter%transfer_tez : @storage
+            SENDER;     # @sender : @storage : @parameter%transfer_tez : @storage
+            COMPARE;    # int : @parameter%transfer_tez : @storage
+            EQ;         # bool : @parameter%transfer_tez : @storage
+            IF
+              {}
               {
-                SWAP;       # address : pair address (list (pair address (pair nat nat)))
-                # == transfer_fa2 ==
-                # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # address : pair address (list (pair address (pair nat nat)))
-                DUP;        # address : address : pair address (list (pair address (pair nat nat)))
-                DUG 2;      # address : pair address (list (pair address (pair nat nat))) : address
-                SENDER;     # @sender : address : pair address (list (pair address (pair nat nat))) : address
-                COMPARE;    # int : pair address (list (pair address (pair nat nat))) : address
-                EQ;         # bool : pair address (list (pair address (pair nat nat))) : address
-                IF
-                  {}
-                  {
-                    PUSH string "NOT_ALLOWED"; # string : pair address (list (pair address (pair nat nat))) : address
-                    FAILWITH;   # FAILED
-                  }; # pair address (list (pair address (pair nat nat))) : address
-                # sp.transfer(sp.list([sp.record(from_ = sp.self_address, txs = params.txs)]), sp.tez(0), sp.contract(sp.TList(sp.TRecord(from_ = sp.TAddress, txs = sp.TList(sp.TRecord(amount = sp.TNat, to_ = sp.TAddress, token_id = sp.TNat).layout(("to_", ("token_id", "amount"))))).layout(("from_", "txs"))), params.token_address, entry_point='transfer').open_some()) # pair address (list (pair address (pair nat nat))) : address
-                DUP;        # pair address (list (pair address (pair nat nat))) : pair address (list (pair address (pair nat nat))) : address
-                CAR;        # address : pair address (list (pair address (pair nat nat))) : address
-                CONTRACT %transfer (list (pair address (list (pair address (pair nat nat))))); # option (contract (list (pair address (list (pair address (pair nat nat)))))) : pair address (list (pair address (pair nat nat))) : address
-                IF_SOME
-                  {}
-                  {
-                    PUSH int 77; # int : pair address (list (pair address (pair nat nat))) : address
-                    FAILWITH;   # FAILED
-                  }; # @some : pair address (list (pair address (pair nat nat))) : address
-                NIL operation; # list operation : @some : pair address (list (pair address (pair nat nat))) : address
-                SWAP;       # @some : list operation : pair address (list (pair address (pair nat nat))) : address
-                PUSH mutez 0; # mutez : @some : list operation : pair address (list (pair address (pair nat nat))) : address
-                NIL (pair address (list (pair address (pair nat nat)))); # list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : pair address (list (pair address (pair nat nat))) : address
-                DIG 4;      # pair address (list (pair address (pair nat nat))) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : address
-                CDR;        # list (pair address (pair nat nat)) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : address
-                SELF_ADDRESS; # @self : list (pair address (pair nat nat)) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : address
-                PAIR;       # pair @self (list (pair address (pair nat nat))) : list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : address
-                CONS;       # list (pair address (list (pair address (pair nat nat)))) : mutez : @some : list operation : address
-                TRANSFER_TOKENS; # operation : list operation : address
-                CONS;       # list operation : address
+                PUSH string "NOT_ALLOWED"; # string : @parameter%transfer_tez : @storage
+                FAILWITH;   # FAILED
+              }; # @parameter%transfer_tez : @storage
+            # sp.send(params.dest, params.value) # @parameter%transfer_tez : @storage
+            DUP;        # @parameter%transfer_tez : @parameter%transfer_tez : @storage
+            CDR;        # address : @parameter%transfer_tez : @storage
+            CONTRACT unit; # option (contract unit) : @parameter%transfer_tez : @storage
+            IF_NONE
+              {
+                PUSH int 35; # int : @parameter%transfer_tez : @storage
+                FAILWITH;   # FAILED
               }
-              {
-                SWAP;       # address : pair mutez address
-                # == transfer_tez ==
-                # sp.verify(sp.sender == self.data.admin, 'NOT_ALLOWED') # address : pair mutez address
-                DUP;        # address : address : pair mutez address
-                DUG 2;      # address : pair mutez address : address
-                SENDER;     # @sender : address : pair mutez address : address
-                COMPARE;    # int : pair mutez address : address
-                EQ;         # bool : pair mutez address : address
-                IF
-                  {}
-                  {
-                    PUSH string "NOT_ALLOWED"; # string : pair mutez address : address
-                    FAILWITH;   # FAILED
-                  }; # pair mutez address : address
-                # sp.send(params.dest, params.value) # pair mutez address : address
-                DUP;        # pair mutez address : pair mutez address : address
-                CDR;        # address : pair mutez address : address
-                CONTRACT unit; # option (contract unit) : pair mutez address : address
-                IF_SOME
-                  {}
-                  {
-                    PUSH int 36; # int : pair mutez address : address
-                    FAILWITH;   # FAILED
-                  }; # @some : pair mutez address : address
-                NIL operation; # list operation : @some : pair mutez address : address
-                SWAP;       # @some : list operation : pair mutez address : address
-                DIG 2;      # pair mutez address : @some : list operation : address
-                CAR;        # mutez : @some : list operation : address
-                UNIT;       # unit : mutez : @some : list operation : address
-                TRANSFER_TOKENS; # operation : list operation : address
-                CONS;       # list operation : address
-              }; # list operation : address
-          }; # list operation : address
-      }; # list operation : address
-    PAIR;       # pair (list operation) address
+              {}; # @some : @parameter%transfer_tez : @storage
+            NIL operation; # list operation : @some : @parameter%transfer_tez : @storage
+            SWAP;       # @some : list operation : @parameter%transfer_tez : @storage
+            DIG 2;      # @parameter%transfer_tez : @some : list operation : @storage
+            CAR;        # mutez : @some : list operation : @storage
+            UNIT;       # unit : mutez : @some : list operation : @storage
+            TRANSFER_TOKENS; # operation : list operation : @storage
+            CONS;       # list operation : @storage
+          }; # list operation : @storage
+      }; # list operation : @storage
+    PAIR;       # pair (list operation) @storage
   };

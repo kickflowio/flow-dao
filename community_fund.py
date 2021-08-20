@@ -11,9 +11,7 @@ FA2 = sp.io.import_script_from_url("file:helpers/fa2.py")
 ########
 
 FA2_TRANSFER_TXS_TYPE = sp.TList(
-    sp.TRecord(to_=sp.TAddress, token_id=sp.TNat, amount=sp.TNat).layout(
-        ("to_", ("token_id", "amount"))
-    )
+    sp.TRecord(to_=sp.TAddress, token_id=sp.TNat, amount=sp.TNat).layout(("to_", ("token_id", "amount")))
 )
 
 ###########
@@ -23,6 +21,7 @@ FA2_TRANSFER_TXS_TYPE = sp.TList(
 
 class CommunityFund(sp.Contract):
     def __init__(self, admin=Addresses.ADMIN):
+        # The admin would typically be the DAO contract, in the case of Kickflow.
         self.init(admin=admin)
 
     @sp.entry_point
@@ -65,9 +64,7 @@ class CommunityFund(sp.Contract):
     def transfer_fa2(self, params):
         sp.set_type(
             params,
-            sp.TRecord(token_address=sp.TAddress, txs=FA2_TRANSFER_TXS_TYPE).layout(
-                ("token_address", "txs")
-            ),
+            sp.TRecord(token_address=sp.TAddress, txs=FA2_TRANSFER_TXS_TYPE).layout(("token_address", "txs")),
         )
 
         # Verify that sender is the admin
@@ -75,9 +72,7 @@ class CommunityFund(sp.Contract):
 
         # Transfer tokens
         c = sp.contract(
-            sp.TList(
-                sp.TRecord(from_=sp.TAddress, txs=FA2_TRANSFER_TXS_TYPE).layout(("from_", "txs"))
-            ),
+            sp.TList(sp.TRecord(from_=sp.TAddress, txs=FA2_TRANSFER_TXS_TYPE).layout(("from_", "txs"))),
             params.token_address,
             "transfer",
         ).open_some()
@@ -86,15 +81,6 @@ class CommunityFund(sp.Contract):
             sp.mutez(0),
             c,
         )
-
-    @sp.entry_point
-    def set_admin(self, new_admin):
-        sp.set_type(new_admin, sp.TAddress)
-
-        # Verify that sender is the admin
-        sp.verify(sp.sender == self.data.admin, Errors.NOT_ALLOWED)
-
-        self.data.admin = new_admin
 
     @sp.entry_point
     def set_delegate(self, new_delegate):
@@ -286,39 +272,6 @@ if __name__ == "__main__":
             ),
         ).run(
             sender=Addresses.ALICE,
-            valid=False,
-            exception=Errors.NOT_ALLOWED,
-        )
-
-    ############
-    # set_admin
-    ############
-
-    @sp.add_test(name="set_admin sets the new admin correctly")
-    def test():
-        scenario = sp.test_scenario()
-
-        community_fund = CommunityFund()
-
-        scenario += community_fund
-
-        # Change admin to ALICE
-        scenario += community_fund.set_admin(Addresses.ALICE).run(sender=Addresses.ADMIN)
-
-        # Verify that admin is set
-        scenario.verify(community_fund.data.admin == Addresses.ALICE)
-
-    @sp.add_test(name="set_admin fails if not called by the admin")
-    def test():
-        scenario = sp.test_scenario()
-
-        community_fund = CommunityFund()
-
-        scenario += community_fund
-
-        # BOB tries to set new admin
-        scenario += community_fund.set_admin(Addresses.ALICE).run(
-            sender=Addresses.BOB,
             valid=False,
             exception=Errors.NOT_ALLOWED,
         )
