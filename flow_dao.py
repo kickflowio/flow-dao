@@ -151,7 +151,7 @@ class FlowDAO(sp.Contract):
             ),
             self.data.token_address,
             "getBalanceAt",
-        ).open_some()
+        ).open_some(Errors.INVALID_GOVERNANCE_TOKEN)
 
         # Check balance snapshot of previous level to avoid flash loan usage
         sp.transfer(
@@ -260,7 +260,7 @@ class FlowDAO(sp.Contract):
             ),
             self.data.token_address,
             "getBalanceAt",
-        ).open_some()
+        ).open_some(Errors.INVALID_GOVERNANCE_TOKEN)
 
         # Check balance snapshot of previous level to avoid flash loan usage
         sp.transfer(

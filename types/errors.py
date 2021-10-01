@@ -36,3 +36,6 @@ TIMELOCK_INACTIVE = "TIMELOCK_INACTIVE"
 
 # Proposal is still under timelock
 EXECUTING_TOO_SOON = "EXECUTING_TOO_SOON"
+
+# Invalid governance token address
+INVALID_GOVERNANCE_TOKEN = "INVALID_GOVERNANCE_TOKEN"
