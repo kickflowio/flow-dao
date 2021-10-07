@@ -39,3 +39,6 @@ EXECUTING_TOO_SOON = "EXECUTING_TOO_SOON"
 
 # Invalid governance token address
 INVALID_GOVERNANCE_TOKEN = "INVALID_GOVERNANCE_TOKEN"
+
+# Invalid token contract provided in the community fund transfer entrypoints
+INVALID_TOKEN_CONTRACT = "INVALID_TOKEN_CONTRACT"
