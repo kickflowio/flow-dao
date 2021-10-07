@@ -42,13 +42,13 @@ code
                 PUSH string "NOT_ALLOWED"; # string : @parameter%transfer_fa12 : @storage
                 FAILWITH;   # FAILED
               }; # @parameter%transfer_fa12 : @storage
-            # sp.transfer(sp.record(from_ = sp.self_address, to_ = params.dest, value = params.value), sp.tez(0), sp.contract(sp.TRecord(from_ = sp.TAddress, to_ = sp.TAddress, value = sp.TNat).layout(("from_ as from", ("to_ as to", "value"))), params.token_address, entry_point='transfer').open_some()) # @parameter%transfer_fa12 : @storage
+            # sp.transfer(sp.record(from_ = sp.self_address, to_ = params.dest, value = params.value), sp.tez(0), sp.contract(sp.TRecord(from_ = sp.TAddress, to_ = sp.TAddress, value = sp.TNat).layout(("from_ as from", ("to_ as to", "value"))), params.token_address, entry_point='transfer').open_some(message = 'INVALID_TOKEN_CONTRACT')) # @parameter%transfer_fa12 : @storage
             DUP;        # @parameter%transfer_fa12 : @parameter%transfer_fa12 : @storage
             CAR;        # address : @parameter%transfer_fa12 : @storage
             CONTRACT %transfer (pair address (pair address nat)); # option (contract (pair address (pair address nat))) : @parameter%transfer_fa12 : @storage
             IF_NONE
               {
-                PUSH int 50; # int : @parameter%transfer_fa12 : @storage
+                PUSH string "INVALID_TOKEN_CONTRACT"; # string : @parameter%transfer_fa12 : @storage
                 FAILWITH;   # FAILED
               }
               {}; # @some : @parameter%transfer_fa12 : @storage
@@ -83,13 +83,13 @@ code
                 PUSH string "NOT_ALLOWED"; # string : @parameter%transfer_fa2 : @storage
                 FAILWITH;   # FAILED
               }; # @parameter%transfer_fa2 : @storage
-            # sp.transfer(sp.list([sp.record(from_ = sp.self_address, txs = params.txs)]), sp.tez(0), sp.contract(sp.TList(sp.TRecord(from_ = sp.TAddress, txs = sp.TList(sp.TRecord(amount = sp.TNat, to_ = sp.TAddress, token_id = sp.TNat).layout(("to_", ("token_id", "amount"))))).layout(("from_", "txs"))), params.token_address, entry_point='transfer').open_some()) # @parameter%transfer_fa2 : @storage
+            # sp.transfer(sp.list([sp.record(from_ = sp.self_address, txs = params.txs)]), sp.tez(0), sp.contract(sp.TList(sp.TRecord(from_ = sp.TAddress, txs = sp.TList(sp.TRecord(amount = sp.TNat, to_ = sp.TAddress, token_id = sp.TNat).layout(("to_", ("token_id", "amount"))))).layout(("from_", "txs"))), params.token_address, entry_point='transfer').open_some(message = 'INVALID_TOKEN_CONTRACT')) # @parameter%transfer_fa2 : @storage
             DUP;        # @parameter%transfer_fa2 : @parameter%transfer_fa2 : @storage
             CAR;        # address : @parameter%transfer_fa2 : @storage
             CONTRACT %transfer (list (pair address (list (pair address (pair nat nat))))); # option (contract (list (pair address (list (pair address (pair nat nat)))))) : @parameter%transfer_fa2 : @storage
             IF_NONE
               {
-                PUSH int 74; # int : @parameter%transfer_fa2 : @storage
+                PUSH string "INVALID_TOKEN_CONTRACT"; # string : @parameter%transfer_fa2 : @storage
                 FAILWITH;   # FAILED
               }
               {}; # @some : @parameter%transfer_fa2 : @storage

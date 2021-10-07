@@ -168,7 +168,6 @@ class FlowDAO(sp.Contract):
         sp.set_type(balance, sp.TNat)
         # Verify state and proposal buffer values
         sp.verify(self.data.state == STATE_AWAITING_BALANCE_SNAPSHOT, Errors.INCORRECT_STATE)
-        sp.verify(self.data.proposal_buffer.is_some(), Errors.PROPOSAL_BUFFER_EMPTY)
 
         # Other sanity checks
         sp.verify(
@@ -178,7 +177,7 @@ class FlowDAO(sp.Contract):
         sp.verify(sp.sender == self.data.token_address, Errors.NOT_ALLOWED)
 
         # value stored in proposal buffer
-        buffer_value = self.data.proposal_buffer.open_some()
+        buffer_value = self.data.proposal_buffer.open_some(Errors.PROPOSAL_BUFFER_EMPTY)
 
         proposal = sp.record(
             up_votes=0,
@@ -278,13 +277,13 @@ class FlowDAO(sp.Contract):
 
         # Verify state and voting buffer
         sp.verify(self.data.state == STATE_AWAITING_BALANCE_SNAPSHOT, Errors.INCORRECT_STATE)
-        sp.verify(self.data.voting_buffer.is_some(), Errors.VOTING_BUFFER_EMPTY)
 
         # Other sanity checks
         sp.verify(balance > 0, Errors.INVALID_VOTE)
         sp.verify(sp.sender == self.data.token_address, Errors.NOT_ALLOWED)
 
-        buffer_value = self.data.voting_buffer.open_some()
+        # value stored in voting buffer
+        buffer_value = self.data.voting_buffer.open_some(Errors.VOTING_BUFFER_EMPTY)
 
         proposal = self.data.proposals[buffer_value.proposal_id]
 

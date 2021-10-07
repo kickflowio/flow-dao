@@ -53,7 +53,7 @@ class CommunityFund(sp.Contract):
             ),
             params.token_address,
             "transfer",
-        ).open_some()
+        ).open_some(Errors.INVALID_TOKEN_CONTRACT)
         sp.transfer(
             sp.record(from_=sp.self_address, to_=params.dest, value=params.value),
             sp.mutez(0),
@@ -75,7 +75,7 @@ class CommunityFund(sp.Contract):
             sp.TList(sp.TRecord(from_=sp.TAddress, txs=FA2_TRANSFER_TXS_TYPE).layout(("from_", "txs"))),
             params.token_address,
             "transfer",
-        ).open_some()
+        ).open_some(Errors.INVALID_TOKEN_CONTRACT)
         sp.transfer(
             sp.list([sp.record(from_=sp.self_address, txs=params.txs)]),
             sp.mutez(0),
